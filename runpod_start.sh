@@ -15,7 +15,7 @@ echo ""
 # CONFIGURATION
 # ==========================================
 # Dataset Manager repository (set by template or environment)
-DATASET_MANAGER_REPO="${DATASET_MANAGER_REPO:-https://github.com/elevenheights/dataset-manager.git}"
+DATASET_MANAGER_REPO="${DATASET_MANAGER_REPO:-https://github.com/Elevenheights/dataset-manager.git}"
 DATASET_MANAGER_BRANCH="${DATASET_MANAGER_BRANCH:-main}"
 
 echo "Configuration:"
