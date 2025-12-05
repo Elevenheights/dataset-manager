@@ -83,8 +83,17 @@ source venv/bin/activate
 # Already includes: PyTorch 2.8.0, torchvision, torchaudio with CUDA 12.8.1
 echo "Using PyTorch from base container:"
 python -c "import torch; print(f'PyTorch {torch.__version__}, CUDA {torch.version.cuda}')"
+
+# Install hf_transfer for faster downloads (multi-threaded)
+python -m pip install hf_transfer -U
+
+# Install huggingface-hub and requirements
 python -m pip install "huggingface-hub>=0.34,<1.0" -U
 python -m pip install -r requirements.txt -U
+
+# Enable high-speed transfers for all downloads
+export HF_HUB_ENABLE_HF_TRANSFER=1
+echo "✅ HuggingFace high-speed downloads enabled (hf_transfer)"
 
 cd /workspace
 mkdir -p models
