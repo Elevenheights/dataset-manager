@@ -105,15 +105,14 @@ mkdir -p models
 # Download AI Toolkit Models
 # ==========================================
 echo "=== Downloading Z-Image-De-Turbo model (12.3GB) ==="
-python -m huggingface_hub.commands.huggingface_cli download \
+hf download \
   ostris/Z-Image-De-Turbo \
   z_image_de_turbo_v1_bf16.safetensors \
   --local-dir models \
-  --local-dir-use-symlinks False \
   --resume-download
 
 echo "=== Downloading Z-Image training adapter ==="
-python -m huggingface_hub.commands.huggingface_cli download \
+hf download \
   ostris/zimage_turbo_training_adapter \
   --local-dir models/zimage_turbo_training_adapter \
   --exclude "*.git*" "*.md" \
@@ -126,11 +125,10 @@ echo "=== Downloading Qwen 2.5 VL GGUF model for caption service ==="
 QWEN_MODEL_PATH="/workspace/models/Qwen2.5-VL-7B-Instruct-Q8_0.gguf"
 
 # Download from unsloth (public repository, ~8GB)
-python -m huggingface_hub.commands.huggingface_cli download \
+hf download \
   unsloth/Qwen2.5-VL-7B-Instruct-GGUF \
   Qwen2.5-VL-7B-Instruct-Q8_0.gguf \
   --local-dir models \
-  --local-dir-use-symlinks False \
   --resume-download
 
 # Wait for download to complete and verify
@@ -150,7 +148,7 @@ else
     echo "⚠️  WARNING: Qwen model download failed"
     echo "   Caption service will be disabled"
     echo "   You can manually download later with:"
-    echo "     huggingface-cli download unsloth/Qwen2.5-VL-7B-Instruct-GGUF Qwen2.5-VL-7B-Instruct-Q8_0.gguf --local-dir /workspace/models"
+    echo "     hf download unsloth/Qwen2.5-VL-7B-Instruct-GGUF Qwen2.5-VL-7B-Instruct-Q8_0.gguf --local-dir /workspace/models"
 fi
 
 # ==========================================
