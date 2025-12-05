@@ -1,36 +1,196 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# UltraMuse Dataset Manager
 
-## Getting Started
+Professional LoRA training dataset preparation tool with AI-powered captioning.
 
-First, run the development server:
+**⚡ Want to get started fast? See [QUICKSTART.md](QUICKSTART.md)**
 
+## 🌟 Features
+
+- ✅ **ZIP Upload** - Drop your images once, extract automatically
+- ✅ **AI Captioning** - Qwen 2.5 VL 7B generates detailed, training-optimized captions
+- ✅ **Virtual Scrolling** - Handle 1000+ images smoothly
+- ✅ **Batch Operations** - Caption, edit, and manage hundreds of images at once
+- ✅ **Add/Remove** - Dynamically manage images in your dataset
+- ✅ **AI Toolkit Export** - One-click export to training format
+- ✅ **Dev + Prod** - Works locally and on RunPod
+
+## 🚀 Quick Start
+
+### Local Development (Windows)
+
+**1. Start Dataset Manager**
 ```bash
+cd dataset-manager
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```
+→ Open `http://localhost:3000`
+
+**2. Start Caption Service** (Optional - for AI captioning)
+```bash
+# Copy .env.caption.example to .env.caption
+# Set DEV_MODEL_PATH to your Qwen GGUF model location
+start_caption_service.bat
+```
+→ Service runs on `http://localhost:11435`
+
+### RunPod Production (True One-Click)
+
+**Using the UltraMuse RunPod Template:**
+
+1. Go to RunPod
+2. Select **"UltraMuse Dataset Manager"** template
+3. Click **"Deploy"**
+4. Wait ~25 minutes ☕
+
+**Done!** Access your apps:
+- Dataset Manager: `http://<runpod-url>:3000`
+- AI Toolkit: `http://<runpod-url>:8675`
+
+The template automatically:
+- ✅ Downloads setup script from UltraMuse website
+- ✅ Clones Dataset Manager, AI Toolkit, ComfyUI
+- ✅ Downloads all models (~20GB): Qwen 2.5 VL, Z-Image-Turbo
+- ✅ Installs dependencies and starts all services
+- ✅ Everything runs in background
+
+**No SSH, no commands, no configuration required.**
+
+---
+
+**For Advanced Users:** See deployment docs:
+- [QUICKSTART.md](QUICKSTART.md) - Quick setup guide
+- [RUNPOD_TEMPLATE.md](RUNPOD_TEMPLATE.md) - Template configuration
+- [RUNPOD_DEPLOYMENT.md](RUNPOD_DEPLOYMENT.md) - Manual deployment
+- [USAGE_EXAMPLE.md](USAGE_EXAMPLE.md) - Complete workflow
+
+## 📖 Documentation
+
+- **[QUICKSTART.md](QUICKSTART.md)** ⭐ - Get running in 5 minutes
+- **[DEV_SETUP.md](DEV_SETUP.md)** - Local development setup
+- **[RUNPOD_TEMPLATE.md](RUNPOD_TEMPLATE.md)** - Template configuration
+- **[RUNPOD_DEPLOYMENT.md](RUNPOD_DEPLOYMENT.md)** - Deployment guide
+- **[USAGE_EXAMPLE.md](USAGE_EXAMPLE.md)** - Complete workflow
+- **[ENV_FILES_NOTE.md](ENV_FILES_NOTE.md)** - Environment variables explained
+- **[CAPTION_SERVICE_README.md](CAPTION_SERVICE_README.md)** - Caption service details
+
+## ❓ FAQ
+
+**Q: Do I need to commit `.env.caption`?**  
+A: **No!** It's in `.gitignore` and only for local dev. Production works without it.
+
+**Q: Will the RunPod template work without configuration files?**  
+A: **Yes!** Everything uses smart defaults. No .env files needed on RunPod.
+
+**Q: Can I customize the deployment?**  
+A: Yes, set `DATASET_MANAGER_REPO` environment variable to use your own fork.
+
+## 🔧 Tech Stack
+
+**Frontend:**
+- Next.js 16 (App Router)
+- React 19
+- Tailwind CSS 4
+- TypeScript
+- Virtual scrolling (`@tanstack/react-virtual`)
+
+**Backend:**
+- Next.js API Routes
+- Node.js file system operations
+- `node-stream-zip` for robust extraction
+
+**AI Captioning:**
+- Qwen 2.5 VL 7B (Q8 GGUF)
+- llama-cpp-python (GPU accelerated)
+- Flask API server
+
+## 📦 Project Structure
+
+```
+dataset-manager/
+├── src/                    # Next.js application
+│   ├── app/               # Pages and API routes
+│   ├── components/        # React components
+│   ├── lib/               # Utilities
+│   └── types/             # TypeScript types
+├── data/                  # Local data storage
+│   ├── datasets/          # Processed datasets
+│   ├── uploads/           # Temporary uploads
+│   └── exports/           # Dev mode exports
+├── caption_service.py     # Qwen caption service
+├── runpod_start.sh       # RunPod startup (automated)
+├── start_caption_service.bat  # Windows caption service
+└── package.json
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 🎯 Workflow
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. **Upload** → Drop ZIP with images
+2. **Caption** → AI generates descriptions or edit manually
+3. **Manage** → Add/remove images, search, filter
+4. **Export** → One-click to AI Toolkit format
+5. **Train** → Use exported dataset in AI Toolkit
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 🔑 Key Capabilities
 
-## Learn More
+### Dataset Management
+- Upload multiple ZIPs
+- Add images to existing datasets
+- Delete selected images
+- Search by filename or caption
+- Filter by caption status
 
-To learn more about Next.js, take a look at the following resources:
+### AI Captioning
+- Hardcoded Qwen 2.5 VL model
+- Batch caption 100s of images
+- Custom prompts supported
+- Professional, training-optimized output
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Export
+- **Dev Mode:** Exports to `./data/exports/`
+- **Production:** Exports to `/workspace/ai-toolkit/datasets/`
+- AI Toolkit format: `{dataset}/1_dataset/{image}.jpg + {image}.txt`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## ⚙️ Configuration
 
-## Deploy on Vercel
+### Development
+Create `.env.caption` for local caption service:
+```bash
+DEV_MODEL_PATH=C:\Models\Qwen2.5-VL-7B-Instruct-Q8_0.gguf
+PORT=11435
+N_GPU_LAYERS=-1
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Production (RunPod)
+Environment is automatically configured by `runpod_start.sh`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🆘 Troubleshooting
+
+### Upload fails with "Invalid filename"
+- The new `node-stream-zip` handles this automatically
+- Files with invalid characters are sanitized
+
+### Caption service won't start
+- **Dev:** Check `DEV_MODEL_PATH` in `.env.caption`
+- **Prod:** Verify model downloaded: `/workspace/models/Qwen2.5-VL-7B-Instruct-Q8_0.gguf`
+
+### Export doesn't work
+- **Dev:** Always works (local folder)
+- **Prod:** Check AI Toolkit models downloaded
+
+## 📞 Support
+
+Join our Discord for:
+- Free resources
+- Early model access
+- Support and troubleshooting
+
+🔗 https://discord.gg/9jVnQHDx
+
+## 📄 License
+
+Private project - UltraMuse
+
+---
+
+**Built with ❤️ for the LoRA training community**

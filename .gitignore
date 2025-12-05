@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# .env.caption is for local dev only - NOT needed in production
 
 # vercel
 .vercel
@@ -39,3 +40,20 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local data (datasets, uploads, exports)
+/data/
+
+# Python virtual environments
+venv_caption/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.log
+
+# Documentation (not needed in repo)
+*.md
+
+# OS specific
+Thumbs.db
