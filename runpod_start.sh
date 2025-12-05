@@ -176,9 +176,22 @@ fi
 # Node.js / npm for AI Toolkit UI
 # ==========================================
 if ! command -v npm >/dev/null 2>&1; then
-    echo "=== Installing Node.js and npm ==="
-    apt-get update
-    apt-get install -y nodejs npm
+    echo "=== Installing Node.js and npm (fast binary method) ==="
+    # Download and install Node.js LTS binary directly (much faster than apt-get)
+    NODE_VERSION="20.18.2"
+    cd /tmp
+    wget -q https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz
+    tar -xJf node-v${NODE_VERSION}-linux-x64.tar.xz
+    cp -r node-v${NODE_VERSION}-linux-x64/{bin,include,lib,share} /usr/local/
+    rm -rf node-v${NODE_VERSION}-linux-x64*
+    cd /workspace
+    
+    # Verify installation
+    node --version
+    npm --version
+    echo "✅ Node.js $(node --version) installed"
+else
+    echo "✅ Node.js already installed: $(node --version)"
 fi
 
 # ==========================================
