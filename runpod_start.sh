@@ -79,7 +79,10 @@ if [ ! -d "venv" ]; then
 fi
 
 source venv/bin/activate
-python -m pip install --no-cache-dir torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu126
+# Use PyTorch from base image (runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404)
+# Already includes: PyTorch 2.8.0, torchvision, torchaudio with CUDA 12.8.1
+echo "Using PyTorch from base container:"
+python -c "import torch; print(f'PyTorch {torch.__version__}, CUDA {torch.version.cuda}')"
 python -m pip install "huggingface-hub>=0.34,<1.0" -U
 python -m pip install -r requirements.txt -U
 
