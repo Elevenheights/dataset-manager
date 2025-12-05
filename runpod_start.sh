@@ -113,32 +113,33 @@ python -m huggingface_hub.commands.huggingface_cli download \
 echo "=== Downloading Qwen 2.5 VL GGUF model for caption service ==="
 QWEN_MODEL_PATH="/workspace/models/Qwen2.5-VL-7B-Instruct-Q8_0.gguf"
 
-# Download the model
+# Try to download the model (may require authentication or be gated)
+echo "Attempting to download Qwen 2.5 VL GGUF..."
 python -m huggingface_hub.commands.huggingface_cli download \
   Qwen/Qwen2.5-VL-7B-Instruct-GGUF \
   Qwen2.5-VL-7B-Instruct-Q8_0.gguf \
   --local-dir models \
   --local-dir-use-symlinks False \
-  --resume-download
+  --resume-download || {
+    echo "⚠️  WARNING: Qwen model download failed (may be gated or require authentication)"
+    echo ""
+    echo "The model repository might require HuggingFace authentication."
+    echo "To fix this, you can:"
+    echo "  1. Set HF_TOKEN environment variable in your RunPod template"
+    echo "  2. Or manually download after pod starts:"
+    echo "     huggingface-cli login"
+    echo "     huggingface-cli download Qwen/Qwen2.5-VL-7B-Instruct-GGUF Qwen2.5-VL-7B-Instruct-Q8_0.gguf --local-dir /workspace/models"
+    echo ""
+    echo "Continuing setup without caption service..."
+}
 
-# Wait for download to complete and verify
-MAX_WAIT=600  # Wait up to 10 minutes
-WAITED=0
-while [ ! -f "$QWEN_MODEL_PATH" ] && [ $WAITED -lt $MAX_WAIT ]; do
-    echo "⏳ Waiting for Qwen model download to complete... ($WAITED/$MAX_WAIT seconds)"
-    sleep 10
-    WAITED=$((WAITED + 10))
-done
-
-# Final verification
+# Verify if download succeeded
 if [ -f "$QWEN_MODEL_PATH" ]; then
     MODEL_SIZE=$(du -h "$QWEN_MODEL_PATH" | cut -f1)
     echo "✅ Qwen 2.5 VL GGUF model ready (size: $MODEL_SIZE)"
 else
-    echo "❌ ERROR: Qwen 2.5 VL GGUF model download failed or timed out!"
-    echo "Caption service will not work until model is available."
-    echo "You can manually download it later with:"
-    echo "  python -m huggingface_hub.commands.huggingface_cli download Qwen/Qwen2.5-VL-7B-Instruct-GGUF Qwen2.5-VL-7B-Instruct-Q8_0.gguf --local-dir /workspace/models"
+    echo "⚠️  Qwen model not available - caption service will be disabled"
+    echo "   Dataset Manager and AI Toolkit will still work for manual captioning and training"
 fi
 
 # ==========================================
