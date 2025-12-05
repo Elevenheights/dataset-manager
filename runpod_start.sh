@@ -75,14 +75,17 @@ git pull origin main || true
 git submodule update --init --recursive
 
 if [ ! -d "venv" ]; then
-    python3 -m venv venv
+    # Create venv with system-site-packages to inherit PyTorch from base container
+    python3 -m venv --system-site-packages venv
 fi
 
 source venv/bin/activate
-# Use PyTorch from base image (runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404)
-# Already includes: PyTorch 2.8.0, torchvision, torchaudio with CUDA 12.8.1
-echo "Using PyTorch from base container:"
-python -c "import torch; print(f'PyTorch {torch.__version__}, CUDA {torch.version.cuda}')"
+# Verify PyTorch from base image is accessible
+echo "Verifying PyTorch from base container:"
+python -c "import torch; print(f'  ✅ PyTorch {torch.__version__}, CUDA {torch.version.cuda}')" || {
+    echo "  ⚠️  PyTorch not found, installing..."
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+}
 
 # Install hf_transfer for faster downloads (multi-threaded)
 python -m pip install hf_transfer -U
