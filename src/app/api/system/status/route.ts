@@ -4,7 +4,7 @@ import path from 'path';
 
 // Model paths (RunPod production paths)
 const QWEN_MODEL_PATH = '/workspace/models/Qwen2.5-VL-7B-Instruct-Q8_0.gguf';
-const ZIMAGE_MODEL_PATH = '/workspace/models/Z-Image-Turbo';
+const ZIMAGE_MODEL_PATH = '/workspace/models/z_image_de_turbo_v1_bf16.safetensors';
 const ADAPTER_MODEL_PATH = '/workspace/models/zimage_turbo_training_adapter';
 
 // For development, check if we're in dev mode

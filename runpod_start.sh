@@ -89,11 +89,12 @@ mkdir -p models
 # ==========================================
 # Download AI Toolkit Models
 # ==========================================
-echo "=== Downloading Z-Image-Turbo model ==="
+echo "=== Downloading Z-Image-De-Turbo model (12.3GB) ==="
 python -m huggingface_hub.commands.huggingface_cli download \
-  Tongyi-MAI/Z-Image-Turbo \
-  --local-dir models/Z-Image-Turbo \
-  --exclude "*.git*" "*.md" \
+  ostris/Z-Image-De-Turbo \
+  z_image_de_turbo_v1_bf16.safetensors \
+  --local-dir models \
+  --local-dir-use-symlinks False \
   --resume-download
 
 echo "=== Downloading Z-Image training adapter ==="
@@ -171,23 +172,25 @@ fi
 # Verify AI Toolkit Models Downloaded
 # ==========================================
 echo "=== Verifying AI Toolkit models are ready ==="
-ZIMAGE_MODEL="/workspace/models/Z-Image-Turbo"
+ZIMAGE_MODEL="/workspace/models/z_image_de_turbo_v1_bf16.safetensors"
 ADAPTER_MODEL="/workspace/models/zimage_turbo_training_adapter"
 
 # Wait for AI Toolkit models if needed
-if [ ! -d "$ZIMAGE_MODEL" ] || [ ! -d "$ADAPTER_MODEL" ]; then
+if [ ! -f "$ZIMAGE_MODEL" ] || [ ! -d "$ADAPTER_MODEL" ]; then
     echo "⏳ Waiting for AI Toolkit models to finish downloading..."
     MAX_WAIT=1200  # Wait up to 20 minutes for large models
     WAITED=0
-    while ([ ! -d "$ZIMAGE_MODEL" ] || [ ! -d "$ADAPTER_MODEL" ]) && [ $WAITED -lt $MAX_WAIT ]; do
+    while ([ ! -f "$ZIMAGE_MODEL" ] || [ ! -d "$ADAPTER_MODEL" ]) && [ $WAITED -lt $MAX_WAIT ]; do
         sleep 15
         WAITED=$((WAITED + 15))
         echo "  Still waiting... ($WAITED/$MAX_WAIT seconds)"
     done
 fi
 
-if [ -d "$ZIMAGE_MODEL" ] && [ -d "$ADAPTER_MODEL" ]; then
+if [ -f "$ZIMAGE_MODEL" ] && [ -d "$ADAPTER_MODEL" ]; then
+    ZIMAGE_SIZE=$(du -h "$ZIMAGE_MODEL" | cut -f1)
     echo "✅ AI Toolkit models ready for training"
+    echo "   Z-Image-De-Turbo: $ZIMAGE_SIZE"
 else
     echo "⚠️  WARNING: AI Toolkit models not fully downloaded"
 fi
