@@ -52,6 +52,7 @@ function CaptionPageContent() {
   const [exporting, setExporting] = useState(false);
   const [exportPath, setExportPath] = useState('');
   const [showExportModal, setShowExportModal] = useState(false);
+  const [exportMode, setExportMode] = useState<'zip' | 'aitoolkit'>('zip');
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [checkingStatus, setCheckingStatus] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -225,37 +226,68 @@ function CaptionPageContent() {
   const handleExport = async () => {
     if (!dataset) return;
 
-    // Check if AI Toolkit models are ready (production only)
-    if (!exportReady && !systemStatus?.dev_mode) {
-      alert('AI Toolkit models are not ready yet. Please wait for downloads to complete.');
-      return;
-    }
-
     setExporting(true);
 
     try {
-      const response = await fetch('/api/export', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          datasetId: dataset.id,
-          outputPath: exportPath.trim() || undefined, // Optional - uses default if empty
-        }),
-      });
+      if (exportMode === 'zip') {
+        // Download as ZIP
+        const response = await fetch('/api/export/zip', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            datasetId: dataset.id,
+          }),
+        });
 
-      const result = await response.json();
+        if (!response.ok) {
+          const result = await response.json();
+          throw new Error(result.error || 'ZIP export failed');
+        }
 
-      if (!response.ok) {
-        throw new Error(result.error || 'Export failed');
+        // Download the ZIP file
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${dataset.name.replace(/[^a-zA-Z0-9-_]/g, '_')}_aitoolkit.zip`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        alert('Dataset exported as ZIP file!');
+        setShowExportModal(false);
+      } else {
+        // Export to AI Toolkit
+        // Check if AI Toolkit models are ready (production only)
+        if (!exportReady && !systemStatus?.dev_mode) {
+          alert('AI Toolkit models are not ready yet. Please wait for downloads to complete.');
+          return;
+        }
+
+        const response = await fetch('/api/export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            datasetId: dataset.id,
+            outputPath: exportPath.trim() || undefined, // Optional - uses default if empty
+          }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Export failed');
+        }
+
+        const message = result.mode === 'development'
+          ? `${result.message}\n\nExported to: ${result.outputPath}`
+          : result.message;
+        
+        alert(message);
+        setShowExportModal(false);
+        setExportPath(''); // Reset for next export
       }
-
-      const message = result.mode === 'development'
-        ? `${result.message}\n\nExported to: ${result.outputPath}`
-        : result.message;
-      
-      alert(message);
-      setShowExportModal(false);
-      setExportPath(''); // Reset for next export
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Export failed');
     } finally {
@@ -500,51 +532,104 @@ function CaptionPageContent() {
               </h2>
             </div>
             <div className="p-4 space-y-4">
-              {/* Export destination info */}
-              {systemStatus?.dev_mode ? (
+              {/* Export Mode Selection */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-[var(--color-text-secondary)]">
+                  Export Method
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setExportMode('zip')}
+                    className={`p-4 rounded-lg border transition-all text-left ${
+                      exportMode === 'zip'
+                        ? 'border-[var(--color-accent-purple)] bg-[var(--color-accent-purple)]/10'
+                        : 'border-[var(--color-border)] hover:border-[var(--color-border-hover)]'
+                    }`}
+                  >
+                    <Download className="w-5 h-5 text-[var(--color-accent-purple)] mb-2" />
+                    <p className="font-medium text-sm mb-1">Download ZIP</p>
+                    <p className="text-xs text-[var(--color-text-muted)]">
+                      Save to your computer
+                    </p>
+                  </button>
+                  <button
+                    onClick={() => setExportMode('aitoolkit')}
+                    className={`p-4 rounded-lg border transition-all text-left ${
+                      exportMode === 'aitoolkit'
+                        ? 'border-[var(--color-accent-orange)] bg-[var(--color-accent-orange)]/10'
+                        : 'border-[var(--color-border)] hover:border-[var(--color-border-hover)]'
+                    }`}
+                  >
+                    <FolderOpen className="w-5 h-5 text-[var(--color-accent-orange)] mb-2" />
+                    <p className="font-medium text-sm mb-1">AI Toolkit</p>
+                    <p className="text-xs text-[var(--color-text-muted)]">
+                      Send to training folder
+                    </p>
+                  </button>
+                </div>
+              </div>
+
+              {/* Mode-specific info */}
+              {exportMode === 'aitoolkit' && (
+                systemStatus?.dev_mode ? (
+                  <div className="p-3 rounded-lg bg-[var(--color-accent-purple)]/10 border border-[var(--color-accent-purple)]/30">
+                    <p className="text-sm font-medium text-[var(--color-accent-purple)] mb-1">
+                      🔧 Development Mode
+                    </p>
+                    <p className="text-xs text-[var(--color-text-muted)] mb-2">
+                      Export to: <code className="font-mono text-[var(--color-accent-purple)]">./data/exports/{dataset?.name}/1_dataset/</code>
+                    </p>
+                    <p className="text-xs text-[var(--color-text-muted)]">
+                      Images and .txt caption files will be saved here for testing
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/30">
+                    <p className="text-sm font-medium text-green-400 mb-1">
+                      🚀 Production Mode (RunPod)
+                    </p>
+                    <p className="text-xs text-[var(--color-text-muted)] mb-2">
+                      Export to: <code className="font-mono text-green-400">/workspace/ai-toolkit/datasets/{dataset?.name}/1_dataset/</code>
+                    </p>
+                    <p className="text-xs text-[var(--color-text-muted)]">
+                      Ready for AI Toolkit training
+                    </p>
+                  </div>
+                )
+              )}
+
+              {exportMode === 'zip' && (
                 <div className="p-3 rounded-lg bg-[var(--color-accent-purple)]/10 border border-[var(--color-accent-purple)]/30">
                   <p className="text-sm font-medium text-[var(--color-accent-purple)] mb-1">
-                    🔧 Development Mode
-                  </p>
-                  <p className="text-xs text-[var(--color-text-muted)] mb-2">
-                    Export to: <code className="font-mono text-[var(--color-accent-purple)]">./data/exports/{dataset?.name}/1_dataset/</code>
+                    📦 Download Package
                   </p>
                   <p className="text-xs text-[var(--color-text-muted)]">
-                    Images and .txt caption files will be saved here for testing
-                  </p>
-                </div>
-              ) : (
-                <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/30">
-                  <p className="text-sm font-medium text-green-400 mb-1">
-                    🚀 Production Mode (RunPod)
-                  </p>
-                  <p className="text-xs text-[var(--color-text-muted)] mb-2">
-                    Export to: <code className="font-mono text-green-400">/workspace/ai-toolkit/datasets/{dataset?.name}/1_dataset/</code>
-                  </p>
-                  <p className="text-xs text-[var(--color-text-muted)]">
-                    Ready for AI Toolkit training
+                    Downloads a ZIP file with AI Toolkit folder structure:<br />
+                    <code className="font-mono">1_dataset/image.jpg + image.txt</code>
                   </p>
                 </div>
               )}
 
-              {/* Optional custom path */}
-              <details className="group">
-                <summary className="text-sm font-medium text-[var(--color-text-secondary)] cursor-pointer hover:text-[var(--color-accent-purple)] transition-colors">
-                  Advanced: Custom Output Path
-                </summary>
-                <div className="mt-3">
-                  <input
-                    type="text"
-                    value={exportPath}
-                    onChange={(e) => setExportPath(e.target.value)}
-                    placeholder={systemStatus?.dev_mode ? 'C:\\custom\\path' : '/custom/path'}
-                    className="input-field"
-                  />
-                  <p className="text-xs text-[var(--color-text-muted)] mt-2">
-                    Leave empty to use default location. A subfolder `1_dataset` will be created.
-                  </p>
-                </div>
-              </details>
+              {/* Optional custom path - only for AI Toolkit mode */}
+              {exportMode === 'aitoolkit' && (
+                <details className="group">
+                  <summary className="text-sm font-medium text-[var(--color-text-secondary)] cursor-pointer hover:text-[var(--color-accent-purple)] transition-colors">
+                    Advanced: Custom Output Path
+                  </summary>
+                  <div className="mt-3">
+                    <input
+                      type="text"
+                      value={exportPath}
+                      onChange={(e) => setExportPath(e.target.value)}
+                      placeholder={systemStatus?.dev_mode ? 'C:\\custom\\path' : '/custom/path'}
+                      className="input-field"
+                    />
+                    <p className="text-xs text-[var(--color-text-muted)] mt-2">
+                      Leave empty to use default location. A subfolder `1_dataset` will be created.
+                    </p>
+                  </div>
+                </details>
+              )}
 
               {uncaptionedCount > 0 && (
                 <div className="flex items-center gap-2 p-3 rounded-lg bg-[var(--color-accent-orange)]/10 border border-[var(--color-accent-orange)]/30">
@@ -571,12 +656,12 @@ function CaptionPageContent() {
                 {exporting ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Exporting...
+                    {exportMode === 'zip' ? 'Creating ZIP...' : 'Exporting...'}
                   </>
                 ) : (
                   <>
                     <Download className="w-4 h-4" />
-                    Export
+                    {exportMode === 'zip' ? 'Download ZIP' : 'Export to AI Toolkit'}
                   </>
                 )}
               </button>
