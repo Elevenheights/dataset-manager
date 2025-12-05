@@ -146,19 +146,39 @@ export function getImagePath(datasetId: string, filename: string): string | null
 }
 
 // Export dataset to AI toolkit folder
-export function exportDataset(datasetId: string, outputPath: string): { success: boolean; message: string; exportedCount: number } {
+export function exportDataset(
+  datasetId: string, 
+  outputPath: string, 
+  overwrite: boolean = false
+): { success: boolean; message: string; exportedCount: number; finalPath: string } {
   const dataset = getDataset(datasetId);
   if (!dataset) {
-    return { success: false, message: 'Dataset not found', exportedCount: 0 };
+    return { success: false, message: 'Dataset not found', exportedCount: 0, finalPath: '' };
   }
 
   try {
-    // Create output directory structure
-    // AI toolkit expects: folder/1_token/image.jpg + image.txt
-    const tokenFolder = path.join(outputPath, '1_dataset');
-    if (!fs.existsSync(tokenFolder)) {
-      fs.mkdirSync(tokenFolder, { recursive: true });
+    // Sanitize dataset name for folder
+    const sanitizedName = dataset.name.replace(/[^a-zA-Z0-9-_]/g, '_');
+    
+    // Create folder: 1_{name} (standard format)
+    let tokenFolder = path.join(outputPath, `1_${sanitizedName}`);
+    
+    if (!overwrite) {
+      // If folder exists and not overwriting, increment the number
+      let folderNumber = 1;
+      while (fs.existsSync(tokenFolder)) {
+        folderNumber++;
+        tokenFolder = path.join(outputPath, `${folderNumber}_${sanitizedName}`);
+      }
+    } else {
+      // Overwrite - remove if exists
+      if (fs.existsSync(tokenFolder)) {
+        fs.rmSync(tokenFolder, { recursive: true, force: true });
+      }
     }
+    
+    // Create the folder
+    fs.mkdirSync(tokenFolder, { recursive: true });
 
     let exportedCount = 0;
     for (const image of dataset.images) {
@@ -181,14 +201,16 @@ export function exportDataset(datasetId: string, outputPath: string): { success:
 
     return { 
       success: true, 
-      message: `Successfully exported ${exportedCount} images to ${tokenFolder}`, 
-      exportedCount 
+      message: `Successfully exported ${exportedCount} images to ${path.basename(tokenFolder)}`, 
+      exportedCount,
+      finalPath: tokenFolder,
     };
   } catch (error) {
     return { 
       success: false, 
       message: `Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 
-      exportedCount: 0 
+      exportedCount: 0,
+      finalPath: '',
     };
   }
 }

@@ -12,7 +12,7 @@ const PROD_EXPORT_PATH = '/workspace/ai-toolkit/datasets';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { datasetId, outputPath: customOutputPath } = body;
+    const { datasetId, outputPath: customOutputPath, overwrite = false } = body;
 
     // Get dataset
     let dataset;
@@ -29,33 +29,60 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Determine output path based on mode
-    let outputPath: string;
+    // Determine base output path
+    let basePath: string;
     if (customOutputPath) {
-      // User provided custom path
-      outputPath = customOutputPath;
+      basePath = customOutputPath;
     } else if (isDev) {
-      // Dev mode: use local exports folder
-      outputPath = path.join(DEV_EXPORT_PATH, dataset.name.replace(/[^a-zA-Z0-9-_]/g, '_'));
-      // Ensure exports directory exists
+      basePath = DEV_EXPORT_PATH;
       if (!fs.existsSync(DEV_EXPORT_PATH)) {
         fs.mkdirSync(DEV_EXPORT_PATH, { recursive: true });
       }
     } else {
-      // Production mode: use AI Toolkit datasets folder
-      outputPath = path.join(PROD_EXPORT_PATH, dataset.name.replace(/[^a-zA-Z0-9-_]/g, '_'));
+      basePath = PROD_EXPORT_PATH;
     }
 
-    // Warn about uncaptioned images
-    const uncaptionedCount = dataset.totalImages - dataset.captionedCount;
+    // Check for existing folder with same name
+    const sanitizedName = dataset.name.replace(/[^a-zA-Z0-9-_]/g, '_');
+    const existingFolder = path.join(basePath, `1_${sanitizedName}`);
     
+    if (fs.existsSync(existingFolder) && !overwrite) {
+      // Folder exists and user hasn't confirmed overwrite
+      return NextResponse.json({
+        conflict: true,
+        existingFolder: `1_${sanitizedName}`,
+        message: 'A dataset with this name already exists',
+      });
+    }
+
     // Export the dataset
-    const result = exportDataset(dataset.id, outputPath);
+    const result = exportDataset(dataset.id, basePath, overwrite);
+
+    if (!result.success) {
+      return NextResponse.json(
+        { error: result.message },
+        { status: 500 }
+      );
+    }
+
+    // Get RunPod subdomain for AI Toolkit link
+    const runpodSubdomain = process.env.RUNPOD_POD_ID || process.env.RUNPOD_POD_HOSTNAME;
+    const aiToolkitUrl = runpodSubdomain 
+      ? `https://${runpodSubdomain}-8675.proxy.runpod.net`
+      : isDev 
+        ? 'http://localhost:8675'
+        : null;
+
+    const uncaptionedCount = dataset.totalImages - dataset.captionedCount;
 
     return NextResponse.json({
-      ...result,
-      outputPath,
+      success: true,
+      message: result.message,
+      exportedCount: result.exportedCount,
+      finalPath: result.finalPath,
+      folderName: path.basename(result.finalPath),
       mode: isDev ? 'development' : 'production',
+      aiToolkitUrl,
       uncaptionedCount,
       warning: uncaptionedCount > 0 
         ? `${uncaptionedCount} images have empty captions` 

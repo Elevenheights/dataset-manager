@@ -57,6 +57,8 @@ function CaptionPageContent() {
   const [checkingStatus, setCheckingStatus] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showConflictDialog, setShowConflictDialog] = useState(false);
+  const [conflictFolderName, setConflictFolderName] = useState('');
 
   // Fetch dataset
   const fetchDataset = useCallback(async () => {
@@ -181,6 +183,45 @@ function CaptionPageContent() {
     setSelectedIds(new Set());
   };
 
+  // Handle export conflict resolution
+  const handleExportWithOverwrite = async (shouldOverwrite: boolean) => {
+    if (!dataset) return;
+    
+    setShowConflictDialog(false);
+    setExporting(true);
+
+    try {
+      const response = await fetch('/api/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          datasetId: dataset.id,
+          outputPath: exportPath.trim() || undefined,
+          overwrite: shouldOverwrite,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Export failed');
+      }
+
+      alert(result.message);
+      setShowExportModal(false);
+      setExportPath('');
+      
+      // Open AI Toolkit in new tab
+      if (result.aiToolkitUrl) {
+        window.open(result.aiToolkitUrl, '_blank');
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Export failed');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   // Delete selected images
   const handleDeleteSelected = async () => {
     if (selectedIds.size === 0) return;
@@ -270,23 +311,32 @@ function CaptionPageContent() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             datasetId: dataset.id,
-            outputPath: exportPath.trim() || undefined, // Optional - uses default if empty
+            outputPath: exportPath.trim() || undefined,
+            overwrite: false, // First attempt - check for conflicts
           }),
         });
 
         const result = await response.json();
 
+        // Handle conflict
+        if (result.conflict) {
+          setConflictFolderName(result.existingFolder);
+          setShowConflictDialog(true);
+          return;
+        }
+
         if (!response.ok) {
           throw new Error(result.error || 'Export failed');
         }
 
-        const message = result.mode === 'development'
-          ? `${result.message}\n\nExported to: ${result.outputPath}`
-          : result.message;
-        
-        alert(message);
+        alert(result.message);
         setShowExportModal(false);
-        setExportPath(''); // Reset for next export
+        setExportPath('');
+        
+        // Open AI Toolkit in new tab if available
+        if (result.aiToolkitUrl) {
+          window.open(result.aiToolkitUrl, '_blank');
+        }
       }
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Export failed');
@@ -739,6 +789,80 @@ function CaptionPageContent() {
             <div className="flex items-center justify-end gap-3 p-4 border-t border-[var(--color-border)]">
               <button
                 onClick={() => setShowAddModal(false)}
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Export Conflict Dialog */}
+      {showConflictDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+          <div className="relative w-full max-w-md bg-[var(--color-bg-secondary)] rounded-2xl border border-[var(--color-border)] overflow-hidden">
+            <div className="p-4 border-b border-[var(--color-border)]">
+              <h2
+                className="text-lg font-semibold flex items-center gap-2"
+                style={{ fontFamily: 'var(--font-outfit)' }}
+              >
+                <AlertTriangle className="w-5 h-5 text-[var(--color-accent-orange)]" />
+                Folder Already Exists
+              </h2>
+            </div>
+            <div className="p-4 space-y-4">
+              <p className="text-sm text-[var(--color-text-secondary)]">
+                A dataset folder named <strong className="text-white">{conflictFolderName}</strong> already exists in AI Toolkit.
+              </p>
+              <div className="p-3 rounded-lg bg-[var(--color-bg-tertiary)]/50">
+                <p className="text-xs text-[var(--color-text-muted)] mb-2">
+                  <strong>Update Existing:</strong> Replaces all files in {conflictFolderName}
+                </p>
+                <p className="text-xs text-[var(--color-text-muted)]">
+                  <strong>Create New:</strong> Creates next available folder (2_{dataset?.name.replace(/[^a-zA-Z0-9-_]/g, '_')}, etc.)
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2 p-4 border-t border-[var(--color-border)]">
+              <button
+                onClick={() => handleExportWithOverwrite(true)}
+                disabled={exporting}
+                className="btn-secondary flex items-center justify-center gap-2 bg-[var(--color-accent-orange)]/10 border-[var(--color-accent-orange)]/30 hover:bg-[var(--color-accent-orange)]/20"
+              >
+                {exporting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-4 h-4" />
+                    Update {conflictFolderName}
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => handleExportWithOverwrite(false)}
+                disabled={exporting}
+                className="btn-primary flex items-center justify-center gap-2"
+              >
+                {exporting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4" />
+                    Create New Folder
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => setShowConflictDialog(false)}
+                disabled={exporting}
                 className="btn-secondary"
               >
                 Cancel

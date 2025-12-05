@@ -271,6 +271,18 @@ if [ -d "dataset-manager" ]; then
     export NODE_ENV=production
     export DEV_MODE=false
     
+    # Set RunPod subdomain for AI Toolkit links
+    # RunPod exposes this as RUNPOD_POD_ID or we can extract from hostname
+    if [ -n "$RUNPOD_POD_ID" ]; then
+        export RUNPOD_POD_HOSTNAME="$RUNPOD_POD_ID"
+    else
+        # Try to extract from hostname
+        HOSTNAME=$(hostname)
+        export RUNPOD_POD_HOSTNAME="${HOSTNAME%-*}"
+    fi
+    
+    echo "RunPod Pod ID: $RUNPOD_POD_HOSTNAME"
+    
     # Build the Next.js app
     echo "Building Dataset Manager..."
     npm run build
