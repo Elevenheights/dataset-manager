@@ -5,10 +5,17 @@ set -e
 echo "=========================================="
 echo "  UltraMuse Dataset Manager Setup"
 echo "  RunPod Template Auto-Installer"
+echo "  ⚡ Optimized Edition"
 echo "=========================================="
 echo ""
 echo "This script is automatically run by the"
 echo "UltraMuse RunPod template on instance creation"
+echo ""
+echo "Performance Optimizations:"
+echo "  ⚡ uv package manager (10-100x faster than pip)"
+echo "  ⚡ Parallel model downloads (3 simultaneous)"
+echo "  ⚡ Early PyTorch install (prevents dependency hell)"
+echo "  ⚡ Binary Node.js install (no heavy apt deps)"
 echo ""
 
 # ==========================================
@@ -80,19 +87,28 @@ if [ ! -d "venv" ]; then
 fi
 
 source venv/bin/activate
-# Verify PyTorch from base image is accessible
-echo "Verifying PyTorch from base container:"
-python -c "import torch; print(f'  ✅ PyTorch {torch.__version__}, CUDA {torch.version.cuda}')" || {
-    echo "  ⚠️  PyTorch not found, installing..."
-    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# ==========================================
+# Install uv (10-100x faster than pip)
+# ==========================================
+echo "Installing uv package manager (Rust-based, ultra-fast)..."
+pip install uv
+
+# ==========================================
+# Install PyTorch FIRST to prevent dependency hell
+# ==========================================
+echo "Installing PyTorch with CUDA support (prevents reinstall loops)..."
+python -c "import torch; print(f'  ✅ PyTorch {torch.__version__}, CUDA {torch.version.cuda}')" 2>/dev/null || {
+    echo "  Installing PyTorch 2.5.1+cu121..."
+    uv pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu121
 }
 
 # Install hf_transfer for faster downloads (multi-threaded)
-python -m pip install hf_transfer -U
+uv pip install hf_transfer
 
 # Install huggingface-hub and requirements
-python -m pip install "huggingface-hub>=0.34,<1.0" -U
-python -m pip install -r requirements.txt -U
+uv pip install "huggingface-hub>=0.34,<1.0"
+uv pip install -r requirements.txt
 
 # Enable high-speed transfers for all downloads
 export HF_HUB_ENABLE_HF_TRANSFER=1
@@ -102,66 +118,68 @@ cd /workspace
 mkdir -p models
 
 # ==========================================
-# Download AI Toolkit Models
+# Download Models in Parallel (MAJOR SPEEDUP)
 # ==========================================
-echo "=== Downloading Z-Image-De-Turbo model (12.3GB) ==="
+echo "=== Starting parallel model downloads ==="
+echo "  📥 Z-Image-De-Turbo (12.3GB)"
+echo "  📥 Z-Image training adapter"
+echo "  📥 Qwen 2.5 VL GGUF (7.6GB)"
+echo ""
+
+# Define model paths for verification
+QWEN_MODEL_PATH="/workspace/models/Qwen2.5-VL-7B-Instruct-Q8_0.gguf"
+ZIMAGE_MODEL="/workspace/models/z_image_de_turbo_v1_bf16.safetensors"
+ADAPTER_MODEL="/workspace/models/zimage_turbo_training_adapter"
+
+# Start all three downloads in parallel
+echo "Starting Z-Image-De-Turbo download..."
 hf download \
   ostris/Z-Image-De-Turbo \
   z_image_de_turbo_v1_bf16.safetensors \
-  --local-dir models \
-  --resume-download
+  --local-dir models &
+PID_ZIMAGE=$!
 
-echo "=== Downloading Z-Image training adapter ==="
+echo "Starting Z-Image training adapter download..."
 hf download \
   ostris/zimage_turbo_training_adapter \
   --local-dir models/zimage_turbo_training_adapter \
-  --exclude "*.git*" "*.md" \
-  --resume-download
+  --exclude "*.git*" "*.md" &
+PID_ADAPTER=$!
 
-# ==========================================
-# Download Qwen 2.5 VL GGUF Model for Captioning
-# ==========================================
-echo "=== Downloading Qwen 2.5 VL GGUF model for caption service ==="
-QWEN_MODEL_PATH="/workspace/models/Qwen2.5-VL-7B-Instruct-Q8_0.gguf"
-
-# Download from unsloth (public repository, ~8GB)
+echo "Starting Qwen 2.5 VL GGUF download..."
 hf download \
   unsloth/Qwen2.5-VL-7B-Instruct-GGUF \
   Qwen2.5-VL-7B-Instruct-Q8_0.gguf \
-  --local-dir models \
-  --resume-download
+  --local-dir models &
+PID_QWEN=$!
 
-# Wait for download to complete and verify
-MAX_WAIT=600  # Wait up to 10 minutes
-WAITED=0
-while [ ! -f "$QWEN_MODEL_PATH" ] && [ $WAITED -lt $MAX_WAIT ]; do
-    echo "⏳ Waiting for Qwen model download to complete... ($WAITED/$MAX_WAIT seconds)"
-    sleep 10
-    WAITED=$((WAITED + 10))
-done
-
-# Final verification
-if [ -f "$QWEN_MODEL_PATH" ]; then
-    MODEL_SIZE=$(du -h "$QWEN_MODEL_PATH" | cut -f1)
-    echo "✅ Qwen 2.5 VL GGUF model ready (size: $MODEL_SIZE)"
-else
-    echo "⚠️  WARNING: Qwen model download failed"
-    echo "   Caption service will be disabled"
-    echo "   You can manually download later with:"
-    echo "     hf download unsloth/Qwen2.5-VL-7B-Instruct-GGUF Qwen2.5-VL-7B-Instruct-Q8_0.gguf --local-dir /workspace/models"
-fi
+echo "✅ All downloads started in parallel"
+echo "   While models download, setting up other services..."
+echo ""
 
 # ==========================================
-# ComfyUI Setup
+# ComfyUI Setup (while models download)
 # ==========================================
 echo "=== Setting up ComfyUI ==="
+
+# Deactivate ai-toolkit venv before ComfyUI setup
+deactivate 2>/dev/null || true
+
 if [ ! -d "ComfyUI" ]; then
     git clone https://github.com/comfyanonymous/ComfyUI.git
 fi
 
 cd /workspace/ComfyUI
-git pull origin master || true
-python -m pip install -r requirements.txt -U
+git pull origin main || git pull origin master || true
+
+# Create separate venv for ComfyUI to avoid conflicts
+if [ ! -d "venv" ]; then
+    python3 -m venv venv
+fi
+source venv/bin/activate
+pip install uv 2>/dev/null || true
+uv pip install -r requirements.txt
+deactivate
 
 # ==========================================
 # Install croc for file transfers
@@ -195,24 +213,39 @@ else
 fi
 
 # ==========================================
-# Verify AI Toolkit Models Downloaded
+# Wait for Parallel Model Downloads to Complete
 # ==========================================
-echo "=== Verifying AI Toolkit models are ready ==="
-ZIMAGE_MODEL="/workspace/models/z_image_de_turbo_v1_bf16.safetensors"
-ADAPTER_MODEL="/workspace/models/zimage_turbo_training_adapter"
+echo ""
+echo "=== Waiting for parallel model downloads to complete ==="
+echo "⏳ This may take several minutes depending on network speed..."
+echo ""
 
-# Wait for AI Toolkit models if needed
-if [ ! -f "$ZIMAGE_MODEL" ] || [ ! -d "$ADAPTER_MODEL" ]; then
-    echo "⏳ Waiting for AI Toolkit models to finish downloading..."
-    MAX_WAIT=1200  # Wait up to 20 minutes for large models
-    WAITED=0
-    while ([ ! -f "$ZIMAGE_MODEL" ] || [ ! -d "$ADAPTER_MODEL" ]) && [ $WAITED -lt $MAX_WAIT ]; do
-        sleep 15
-        WAITED=$((WAITED + 15))
-        echo "  Still waiting... ($WAITED/$MAX_WAIT seconds)"
-    done
+# Wait for each download process (with error handling)
+echo "Waiting for Z-Image-De-Turbo download (PID: $PID_ZIMAGE)..."
+if wait $PID_ZIMAGE; then
+    echo "✅ Z-Image-De-Turbo download complete"
+else
+    echo "⚠️  Z-Image-De-Turbo download may have had issues (will verify file later)"
 fi
 
+echo "Waiting for training adapter download (PID: $PID_ADAPTER)..."
+if wait $PID_ADAPTER; then
+    echo "✅ Training adapter download complete"
+else
+    echo "⚠️  Training adapter download may have had issues (will verify file later)"
+fi
+
+echo "Waiting for Qwen model download (PID: $PID_QWEN)..."
+if wait $PID_QWEN; then
+    echo "✅ Qwen model download complete"
+else
+    echo "⚠️  Qwen model download may have had issues (will verify file later)"
+fi
+
+echo ""
+echo "=== Verifying all models downloaded successfully ==="
+
+# Verify Z-Image models
 if [ -f "$ZIMAGE_MODEL" ] && [ -d "$ADAPTER_MODEL" ]; then
     ZIMAGE_SIZE=$(du -h "$ZIMAGE_MODEL" | cut -f1)
     echo "✅ AI Toolkit models ready for training"
@@ -220,6 +253,19 @@ if [ -f "$ZIMAGE_MODEL" ] && [ -d "$ADAPTER_MODEL" ]; then
 else
     echo "⚠️  WARNING: AI Toolkit models not fully downloaded"
 fi
+
+# Verify Qwen model
+if [ -f "$QWEN_MODEL_PATH" ]; then
+    QWEN_SIZE=$(du -h "$QWEN_MODEL_PATH" | cut -f1)
+    echo "✅ Qwen 2.5 VL GGUF model ready (size: $QWEN_SIZE)"
+else
+    echo "⚠️  WARNING: Qwen model download failed"
+    echo "   Caption service will be disabled"
+    echo "   You can manually download later with:"
+    echo "     hf download unsloth/Qwen2.5-VL-7B-Instruct-GGUF Qwen2.5-VL-7B-Instruct-Q8_0.gguf --local-dir /workspace/models"
+fi
+
+echo ""
 
 # ==========================================
 # Setup Caption Service (Qwen 2.5 VL)
@@ -245,11 +291,14 @@ if [ -f "$QWEN_MODEL_PATH" ]; then
     
     source venv/bin/activate
     
+    # Install uv in caption service venv
+    pip install uv
+    
     # Install caption service requirements
     # Note: llama-cpp-python with CUDA support for faster inference
     echo "Installing llama-cpp-python with GPU support..."
-    CMAKE_ARGS="-DLLAMA_CUBLAS=on" pip install llama-cpp-python --force-reinstall --upgrade --no-cache-dir
-    pip install flask flask-cors Pillow requests
+    CMAKE_ARGS="-DGGML_CUDA=on" uv pip install llama-cpp-python --force-reinstall --upgrade --no-cache-dir
+    uv pip install flask flask-cors Pillow requests
     
     echo "✅ Caption service dependencies installed"
     
@@ -290,16 +339,6 @@ cd /workspace
 if [ -d "dataset-manager" ]; then
     cd dataset-manager
     
-    # Install Node.js dependencies if needed
-    if [ ! -d "node_modules" ]; then
-        echo "Installing Dataset Manager dependencies..."
-        npm install
-    fi
-    
-    # Set production environment
-    export NODE_ENV=production
-    export DEV_MODE=false
-    
     # Set RunPod subdomain for AI Toolkit links
     # RunPod exposes this as RUNPOD_POD_ID or we can extract from hostname
     if [ -n "$RUNPOD_POD_ID" ]; then
@@ -311,6 +350,26 @@ if [ -d "dataset-manager" ]; then
     fi
     
     echo "RunPod Pod ID: $RUNPOD_POD_HOSTNAME"
+    
+    # Clean install to prevent module resolution issues
+    # NOTE: Install with NODE_ENV unset to ensure devDependencies (TypeScript) are installed
+    echo "Installing Dataset Manager dependencies (clean install)..."
+    rm -rf node_modules .next
+    npm cache clean --force 2>/dev/null || true
+    unset NODE_ENV
+    npm install
+    
+    # Verify TypeScript is installed
+    if [ -f "node_modules/typescript/bin/tsc" ]; then
+        echo "✅ TypeScript installed successfully"
+    else
+        echo "⚠️ TypeScript not found, installing explicitly..."
+        npm install --save-dev typescript
+    fi
+    
+    # Set production environment for build and runtime
+    export NODE_ENV=production
+    export DEV_MODE=false
     
     # Build the Next.js app
     echo "Building Dataset Manager..."
@@ -334,9 +393,10 @@ fi
 echo "=== Starting AI Toolkit UI ==="
 cd /workspace/ai-toolkit/ui
 
-if [ ! -d node_modules ]; then
-    npm install
-fi
+# Clean install for AI Toolkit UI (same approach as Dataset Manager)
+echo "Installing AI Toolkit UI dependencies..."
+rm -rf node_modules 2>/dev/null || true
+npm install
 
 # Optional: change this env if you want a real password
 # export AI_TOOLKIT_AUTH="${AI_TOOLKIT_AUTH:-changeme}"

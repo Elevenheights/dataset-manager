@@ -281,7 +281,7 @@ export default function BulkCaptionModal({
         </div>
 
         {/* Footer */}
-        {!isGenerating && ollamaConnected && (
+        {!isGenerating && qwenConnected && (
           <div className="flex items-center justify-end gap-3 p-4 border-t border-[var(--color-border)]">
             <button onClick={onClose} className="btn-secondary">
               Cancel

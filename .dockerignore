@@ -1,0 +1,38 @@
+# Dependencies
+node_modules
+
+# Build output
+.next
+out
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Data (will be mounted as volume)
+data/datasets/*
+data/uploads/*
+!data/datasets/.gitkeep
+!data/uploads/.gitkeep
+
+# Models (downloaded at runtime, ~20GB)
+models/
+
+# Misc
+*.md
+!README.md
+

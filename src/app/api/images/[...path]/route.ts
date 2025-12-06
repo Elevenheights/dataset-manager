@@ -38,10 +38,11 @@ export async function GET(
         // Use sharp for thumbnail generation if available
         const sharpModule = await import('sharp').catch(() => null);
         if (sharpModule) {
-          imageBuffer = await sharpModule.default(imageBuffer)
+          const thumbnailBuffer = await sharpModule.default(imageBuffer)
             .resize(300, 300, { fit: 'cover' })
             .jpeg({ quality: 80 })
             .toBuffer();
+          imageBuffer = Buffer.from(thumbnailBuffer);
         }
       } catch {
         // If sharp fails, return original image
@@ -75,6 +76,7 @@ export async function GET(
     );
   }
 }
+
 
 
 

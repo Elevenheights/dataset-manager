@@ -44,6 +44,9 @@ next-env.d.ts
 # local data (datasets, uploads, exports)
 /data/
 
+# Models (downloaded locally for Docker builds, ~20GB)
+/models/
+
 # Python virtual environments
 venv_caption/
 venv/
