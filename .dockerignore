@@ -32,7 +32,10 @@ data/uploads/*
 # Models (downloaded at runtime, ~20GB)
 models/
 
+# Local Test Workspaces (HUGE folders)
+workspace_test/
+runpod_test/
+
 # Misc
 *.md
 !README.md
-

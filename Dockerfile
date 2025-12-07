@@ -11,7 +11,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV HF_HUB_ENABLE_HF_TRANSFER=1
 # NOTE: NODE_ENV is set to production AFTER npm installs (to include devDependencies)
 
-WORKDIR /workspace
+WORKDIR /app
 
 # ==========================================
 # Install system dependencies
@@ -49,12 +49,12 @@ RUN curl https://getcroc.schollz.com | bash
 # ==========================================
 # Clone and setup AI Toolkit
 # ==========================================
-RUN git clone https://github.com/ostris/ai-toolkit.git /workspace/ai-toolkit && \
-    cd /workspace/ai-toolkit && \
+RUN git clone https://github.com/ostris/ai-toolkit.git /app/ai-toolkit && \
+    cd /app/ai-toolkit && \
     git submodule update --init --recursive
 
 # Create AI Toolkit venv and install dependencies
-RUN cd /workspace/ai-toolkit && \
+RUN cd /app/ai-toolkit && \
     python3 -m venv --system-site-packages venv && \
     . venv/bin/activate && \
     pip install uv && \
@@ -65,9 +65,9 @@ RUN cd /workspace/ai-toolkit && \
 # ==========================================
 # Clone and setup ComfyUI
 # ==========================================
-RUN git clone https://github.com/comfyanonymous/ComfyUI.git /workspace/ComfyUI
+RUN git clone https://github.com/comfyanonymous/ComfyUI.git /app/ComfyUI
 
-RUN cd /workspace/ComfyUI && \
+RUN cd /app/ComfyUI && \
     python3 -m venv venv && \
     . venv/bin/activate && \
     pip install uv && \
@@ -83,28 +83,44 @@ RUN mkdir -p /workspace/models
 # ==========================================
 # Setup Caption Service
 # ==========================================
-RUN mkdir -p /workspace/caption-service && \
-    cd /workspace/caption-service && \
+# Build llama-cpp-python: Use CUDA if GPU build requested, otherwise CPU-only for compatibility
+# To build GPU version: docker build --build-arg ENABLE_GPU=true ...
+# To build CPU version (default): docker build ...
+ARG ENABLE_GPU=false
+
+RUN mkdir -p /app/caption-service && \
+    cd /app/caption-service && \
     python3 -m venv venv && \
     . venv/bin/activate && \
     pip install uv && \
-    CMAKE_ARGS="-DGGML_CUDA=on" uv pip install llama-cpp-python --no-cache-dir && \
-    uv pip install flask flask-cors Pillow requests
+    if [ "$ENABLE_GPU" = "true" ]; then \
+        echo "Building llama-cpp-python with CUDA support..."; \
+        CMAKE_ARGS="-DGGML_CUDA=on" uv pip install llama-cpp-python --no-cache-dir; \
+    else \
+        echo "Building llama-cpp-python for CPU (compatible with all systems)..."; \
+        uv pip install llama-cpp-python --no-cache-dir; \
+    fi && \
+    uv pip install flask flask-cors Pillow requests huggingface-hub hf-transfer
 
 # ==========================================
 # Copy Dataset Manager (use local files instead of cloning)
 # ==========================================
-COPY . /workspace/dataset-manager
+COPY . /app/dataset-manager
 
-# Install Dataset Manager dependencies (including devDependencies for TypeScript)
-RUN cd /workspace/dataset-manager && \
+# Install Dataset Manager Python dependencies (for download_model.py)
+# Use pip directly to avoid --system flag issues with RunPod
+RUN cd /app/dataset-manager && \
+    pip install -r requirements.txt
+
+# Install Dataset Manager Node.js dependencies (including devDependencies for TypeScript)
+RUN cd /app/dataset-manager && \
     npm install --include=dev && \
     npm run build
 
 # ==========================================
 # Setup AI Toolkit UI
 # ==========================================
-RUN cd /workspace/ai-toolkit/ui && \
+RUN cd /app/ai-toolkit/ui && \
     npm install --legacy-peer-deps && \
     npm run build
 
@@ -114,23 +130,23 @@ ENV NODE_ENV=production
 # ==========================================
 # Copy startup script
 # ==========================================
-COPY docker_start.sh /workspace/docker_start.sh
-RUN dos2unix /workspace/docker_start.sh && \
-    chmod +x /workspace/docker_start.sh
+COPY docker_start.sh /app/docker_start.sh
+RUN dos2unix /app/docker_start.sh && \
+    chmod +x /app/docker_start.sh
 
 # ==========================================
 # Expose ports
 # ==========================================
 # 3000  - Dataset Manager
 # 8675  - AI Toolkit UI
-# 11435 - Caption Service
 # 8888  - Jupyter Lab
 # 8188  - ComfyUI (Manual Start)
 # 22    - SSH
-EXPOSE 3000 8675 11435 8888 8188 22
+# Note: 11435 (Caption Service) is internal only
+EXPOSE 3000 8675 8888 8188 22
 
 # ==========================================
 # Start command
 # ==========================================
-CMD ["/workspace/docker_start.sh"]
+CMD ["/app/docker_start.sh"]
 

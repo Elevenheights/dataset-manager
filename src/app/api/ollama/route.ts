@@ -25,7 +25,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { datasetId, imageId, prompt, temperature } = body;
+    const { datasetId, imageId, prompt, temperature, settings } = body;
 
     if (!datasetId || !imageId) {
       return NextResponse.json(
@@ -50,11 +50,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate caption using Qwen 2.5 VL
+    // Construct full image path (image.path is just the filename after the fix)
+    const imagePath = path.join(process.cwd(), 'data', 'datasets', datasetId, image.path);
+
+    // Generate caption using Qwen 2.5 VL with settings
     const result = await generateCaption(
-      image.path,
+      imagePath,
       prompt,
-      temperature || 0.7
+      temperature || 0.7,
+      settings
     );
 
     if (!result.success) {

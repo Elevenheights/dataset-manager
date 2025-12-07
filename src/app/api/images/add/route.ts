@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
       const imageData = {
         id: imageId,
         filename,
-        path: newImagePath,
+        path: filename, // Store only filename, not full path (prevents Windows path issues in Docker)
         thumbnailUrl: `/api/images/${datasetId}/${filename}?thumb=true`,
         fullUrl: `/api/images/${datasetId}/${filename}`,
         caption,

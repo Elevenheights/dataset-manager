@@ -21,8 +21,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "UltraMuse Dataset Manager | LoRA Training Prep",
-  description: "Manage and prepare photo datasets for LoRA training with AI-powered captioning",
+  title: "UltraMuse Dataset + Model Manager",
+  description: "Comprehensive tool for dataset preparation, AI captioning, and model management for LoRA training",
 };
 
 export default function RootLayout({
@@ -57,14 +57,20 @@ export default function RootLayout({
                     className="text-xl font-bold bg-gradient-to-r from-[var(--color-accent-purple-light)] to-[var(--color-accent-orange)] bg-clip-text text-transparent"
                     style={{ fontFamily: "var(--font-outfit)" }}
                   >
-                    UltraMuse Dataset Manager
+                    UltraMuse
                   </h1>
-                  <p className="text-xs text-[var(--color-text-muted)]">LoRA Training Prep</p>
+                  <p className="text-xs text-[var(--color-text-muted)]">Dataset + Model Manager</p>
                 </div>
               </div>
               <nav className="flex items-center gap-4 sm:gap-6">
                 <a
-                  href="/"
+                  href="/models"
+                  className="text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-accent-purple-light)] transition-colors font-medium"
+                >
+                  Models
+                </a>
+                <a
+                  href="/upload"
                   className="text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-accent-purple-light)] transition-colors"
                 >
                   Upload
@@ -74,6 +80,12 @@ export default function RootLayout({
                   className="text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-accent-purple-light)] transition-colors"
                 >
                   Caption
+                </a>
+                <a
+                  href="/train"
+                  className="text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-accent-purple-light)] transition-colors"
+                >
+                  Train
                 </a>
                 <a
                   href="https://discord.gg/9jVnQHDx"

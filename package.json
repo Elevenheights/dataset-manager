@@ -1,7 +1,8 @@
 {
-  "name": "dataset-manager",
+  "name": "ultramuse-dataset-model-manager",
   "version": "0.1.0",
   "private": true,
+  "description": "UltraMuse Dataset + Model Manager - Comprehensive tool for dataset preparation, AI captioning, and model management for LoRA training",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

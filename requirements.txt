@@ -1,0 +1,5 @@
+huggingface-hub>=0.34,<1.0
+hf-transfer>=0.1.5
+requests>=2.31.0
+tqdm>=4.66.0
+

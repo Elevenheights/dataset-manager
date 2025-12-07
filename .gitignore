@@ -47,6 +47,9 @@ next-env.d.ts
 # Models (downloaded locally for Docker builds, ~20GB)
 /models/
 
+# Test workspace data (not needed in repo)
+/workspace_test/
+
 # Python virtual environments
 venv_caption/
 venv/
@@ -54,9 +57,6 @@ __pycache__/
 *.pyc
 *.pyo
 *.log
-
-# Documentation (not needed in repo)
-*.md
 
 # OS specific
 Thumbs.db

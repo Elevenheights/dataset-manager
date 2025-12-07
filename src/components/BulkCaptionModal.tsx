@@ -7,6 +7,7 @@ interface BulkCaptionModalProps {
   datasetId: string;
   selectedIds: string[];
   totalUncaptioned: number;
+  totalImages: number;
   onClose: () => void;
   onComplete: () => void;
 }
@@ -15,11 +16,13 @@ export default function BulkCaptionModal({
   datasetId,
   selectedIds,
   totalUncaptioned,
+  totalImages,
   onClose,
   onComplete,
 }: BulkCaptionModalProps) {
-  const [mode, setMode] = useState<'selected' | 'uncaptioned'>('selected');
+  const [mode, setMode] = useState<'selected' | 'uncaptioned' | 'all'>('selected');
   const [overwriteExisting, setOverwriteExisting] = useState(false);
+  const [appendMode, setAppendMode] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [results, setResults] = useState<{ success: number; failed: number }>({ success: 0, failed: 0 });
@@ -27,17 +30,25 @@ export default function BulkCaptionModal({
   const [customPrompt, setCustomPrompt] = useState('');
   const [defaultPrompt, setDefaultPrompt] = useState('');
 
+  const [connectionError, setConnectionError] = useState<string>('');
+  
   // Check Qwen caption service connection
   useEffect(() => {
     fetch('/api/ollama')
       .then((res) => res.json())
       .then((data) => {
         setQwenConnected(data.connected);
+        if (!data.connected && data.error) {
+          setConnectionError(data.error);
+        }
         if (data.defaultPrompt) {
           setDefaultPrompt(data.defaultPrompt);
         }
       })
-      .catch(() => setQwenConnected(false));
+      .catch(() => {
+        setQwenConnected(false);
+        setConnectionError('Failed to reach caption service');
+      });
   }, []);
 
   const startGeneration = async () => {
@@ -55,13 +66,19 @@ export default function BulkCaptionModal({
       if (mode === 'selected') {
         imageIds = selectedIds;
       } else {
-        // Fetch all uncaptioned image IDs
+        // Fetch image IDs based on mode
         const response = await fetch(`/api/captions?datasetId=${datasetId}`);
         const data = await response.json();
         if (data.dataset) {
-          imageIds = data.dataset.images
-            .filter((img: { hasCaption: boolean; id: string }) => !img.hasCaption)
-            .map((img: { id: string }) => img.id);
+          if (mode === 'all') {
+            // All images regardless of caption status
+            imageIds = data.dataset.images.map((img: { id: string }) => img.id);
+          } else {
+            // Only uncaptioned images
+            imageIds = data.dataset.images
+              .filter((img: { hasCaption: boolean; id: string }) => !img.hasCaption)
+              .map((img: { id: string }) => img.id);
+          }
         } else {
           throw new Error('Failed to get dataset');
         }
@@ -74,6 +91,10 @@ export default function BulkCaptionModal({
       let successCount = 0;
       let failedCount = 0;
 
+      // Load caption settings from localStorage
+      const settingsJson = localStorage.getItem('captionSettings');
+      const settings = settingsJson ? JSON.parse(settingsJson) : {};
+
       for (let i = 0; i < imageIds.length; i += batchSize) {
         const batch = imageIds.slice(i, i + batchSize);
         
@@ -83,9 +104,11 @@ export default function BulkCaptionModal({
           body: JSON.stringify({
             datasetId,
             imageIds: batch,
-            temperature: 0.7,
+            temperature: settings.temperature || 0.7,
             overwriteExisting,
-            prompt: customPrompt || undefined,
+            appendMode,
+            prompt: customPrompt || settings.customPrompt || undefined,
+            settings,
           }),
         });
 
@@ -112,7 +135,7 @@ export default function BulkCaptionModal({
     }
   };
 
-  const targetCount = mode === 'selected' ? selectedIds.length : totalUncaptioned;
+  const targetCount = mode === 'selected' ? selectedIds.length : mode === 'all' ? totalImages : totalUncaptioned;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -150,10 +173,10 @@ export default function BulkCaptionModal({
               <AlertTriangle className="w-5 h-5 text-[var(--color-accent-orange)]" />
               <div>
                 <p className="font-medium text-[var(--color-accent-orange)]">
-                  Qwen Caption Service Not Ready
+                  Caption Service Not Ready
                 </p>
                 <p className="text-sm text-[var(--color-text-muted)]">
-                  Start the caption service with start_caption_service.bat
+                  {connectionError || 'Waiting for caption model files to download...'}
                 </p>
               </div>
             </div>
@@ -164,36 +187,51 @@ export default function BulkCaptionModal({
                 <label className="text-sm font-medium text-[var(--color-text-secondary)]">
                   Images to Caption
                 </label>
-                <div className="flex gap-3">
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     onClick={() => setMode('selected')}
                     disabled={selectedIds.length === 0}
-                    className={`flex-1 p-3 rounded-lg border transition-all ${
+                    className={`p-3 rounded-lg border transition-all ${
                       mode === 'selected'
                         ? 'border-[var(--color-accent-purple)] bg-[var(--color-accent-purple)]/10'
                         : 'border-[var(--color-border)] hover:border-[var(--color-border-hover)]'
                     } ${selectedIds.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <div className="text-left">
-                      <p className="font-medium">Selected Images</p>
-                      <p className="text-sm text-[var(--color-text-muted)]">
-                        {selectedIds.length} images
+                      <p className="font-medium text-sm">Selected</p>
+                      <p className="text-xs text-[var(--color-text-muted)]">
+                        {selectedIds.length}
                       </p>
                     </div>
                   </button>
                   <button
                     onClick={() => setMode('uncaptioned')}
                     disabled={totalUncaptioned === 0}
-                    className={`flex-1 p-3 rounded-lg border transition-all ${
+                    className={`p-3 rounded-lg border transition-all ${
                       mode === 'uncaptioned'
                         ? 'border-[var(--color-accent-purple)] bg-[var(--color-accent-purple)]/10'
                         : 'border-[var(--color-border)] hover:border-[var(--color-border-hover)]'
                     } ${totalUncaptioned === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <div className="text-left">
-                      <p className="font-medium">All Uncaptioned</p>
-                      <p className="text-sm text-[var(--color-text-muted)]">
-                        {totalUncaptioned} images
+                      <p className="font-medium text-sm">Uncaptioned</p>
+                      <p className="text-xs text-[var(--color-text-muted)]">
+                        {totalUncaptioned}
+                      </p>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setMode('all')}
+                    className={`p-3 rounded-lg border transition-all ${
+                      mode === 'all'
+                        ? 'border-[var(--color-accent-purple)] bg-[var(--color-accent-purple)]/10'
+                        : 'border-[var(--color-border)] hover:border-[var(--color-border-hover)]'
+                    }`}
+                  >
+                    <div className="text-left">
+                      <p className="font-medium text-sm">All Images</p>
+                      <p className="text-xs text-[var(--color-text-muted)]">
+                        {totalImages}
                       </p>
                     </div>
                   </button>
@@ -225,17 +263,51 @@ export default function BulkCaptionModal({
               </div>
 
               {/* Options */}
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={overwriteExisting}
-                  onChange={(e) => setOverwriteExisting(e.target.checked)}
-                  className="w-4 h-4 rounded border-[var(--color-border)] bg-[var(--color-bg-tertiary)] text-[var(--color-accent-purple)] focus:ring-[var(--color-accent-purple)]"
-                />
-                <span className="text-sm text-[var(--color-text-secondary)]">
-                  Overwrite existing captions
-                </span>
-              </label>
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-[var(--color-text-secondary)]">
+                  Caption Handling
+                </label>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={overwriteExisting}
+                      onChange={(e) => {
+                        setOverwriteExisting(e.target.checked);
+                        if (e.target.checked) setAppendMode(false);
+                      }}
+                      className="w-4 h-4 rounded border-[var(--color-border)] bg-[var(--color-bg-tertiary)] text-[var(--color-accent-purple)] focus:ring-[var(--color-accent-purple)]"
+                    />
+                    <div>
+                      <p className="text-sm text-[var(--color-text-secondary)]">
+                        Overwrite existing captions
+                      </p>
+                      <p className="text-xs text-[var(--color-text-muted)]">
+                        Replace captions completely with new ones
+                      </p>
+                    </div>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={appendMode}
+                      onChange={(e) => {
+                        setAppendMode(e.target.checked);
+                        if (e.target.checked) setOverwriteExisting(false);
+                      }}
+                      className="w-4 h-4 rounded border-[var(--color-border)] bg-[var(--color-bg-tertiary)] text-[var(--color-accent-purple)] focus:ring-[var(--color-accent-purple)]"
+                    />
+                    <div>
+                      <p className="text-sm text-[var(--color-text-secondary)]">
+                        Append to existing captions
+                      </p>
+                      <p className="text-xs text-[var(--color-text-muted)]">
+                        Add new caption after existing text (with space)
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              </div>
             </>
           ) : (
             /* Progress Display */

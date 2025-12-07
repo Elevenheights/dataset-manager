@@ -73,7 +73,7 @@ export function createDataset(name: string, imageFiles: string[]): Dataset {
     return {
       id,
       filename,
-      path: newPath,
+      path: filename, // Store only filename, not full path (prevents Windows path issues in Docker)
       thumbnailUrl: `/api/images/${datasetId}/${filename}?thumb=true`,
       fullUrl: `/api/images/${datasetId}/${filename}`,
       caption,
@@ -157,27 +157,38 @@ export function exportDataset(
   }
 
   try {
-    // Sanitize dataset name for folder
+    // Sanitize dataset name
     const sanitizedName = dataset.name.replace(/[^a-zA-Z0-9-_]/g, '_');
     
-    // Create folder: 1_{name} (standard format)
-    let tokenFolder = path.join(outputPath, `1_${sanitizedName}`);
+    // Determine dataset root folder (handle versioning)
+    let datasetRoot = path.join(outputPath, sanitizedName);
     
     if (!overwrite) {
-      // If folder exists and not overwriting, increment the number
-      let folderNumber = 1;
-      while (fs.existsSync(tokenFolder)) {
-        folderNumber++;
-        tokenFolder = path.join(outputPath, `${folderNumber}_${sanitizedName}`);
+      let version = 1;
+      // Check if folder exists (and check if it's version 1 implied)
+      if (fs.existsSync(datasetRoot)) {
+        // Try finding next available version
+        let nextVersion = 1;
+        while (fs.existsSync(path.join(outputPath, `${sanitizedName}-${nextVersion}`))) {
+          nextVersion++;
+        }
+        // If base exists but no hyphenated version, start at -1
+        // If base exists AND hyphenated versions exist, use next number
+        datasetRoot = path.join(outputPath, `${sanitizedName}-${nextVersion}`);
       }
     } else {
       // Overwrite - remove if exists
-      if (fs.existsSync(tokenFolder)) {
-        fs.rmSync(tokenFolder, { recursive: true, force: true });
+      if (fs.existsSync(datasetRoot)) {
+        fs.rmSync(datasetRoot, { recursive: true, force: true });
       }
     }
     
-    // Create the folder
+    // Create concept folder inside dataset root
+    // AI Toolkit expects: dataset_name/10_triggerword/images...
+    // We'll use '1_dataset' as default concept folder
+    const tokenFolder = path.join(datasetRoot, '1_dataset');
+    
+    // Create folders
     fs.mkdirSync(tokenFolder, { recursive: true });
 
     let exportedCount = 0;
@@ -201,9 +212,9 @@ export function exportDataset(
 
     return { 
       success: true, 
-      message: `Successfully exported ${exportedCount} images to ${path.basename(tokenFolder)}`, 
+      message: `Successfully exported ${exportedCount} images to ${path.basename(datasetRoot)}/1_dataset`, 
       exportedCount,
-      finalPath: tokenFolder,
+      finalPath: datasetRoot,
     };
   } catch (error) {
     return { 

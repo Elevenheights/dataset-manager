@@ -44,13 +44,13 @@ export async function POST(request: NextRequest) {
 
     // Check for existing folder with same name
     const sanitizedName = dataset.name.replace(/[^a-zA-Z0-9-_]/g, '_');
-    const existingFolder = path.join(basePath, `1_${sanitizedName}`);
+    const existingFolder = path.join(basePath, sanitizedName);
     
     if (fs.existsSync(existingFolder) && !overwrite) {
       // Folder exists and user hasn't confirmed overwrite
       return NextResponse.json({
         conflict: true,
-        existingFolder: `1_${sanitizedName}`,
+        existingFolder: sanitizedName,
         message: 'A dataset with this name already exists',
       });
     }

@@ -35,12 +35,20 @@ export default function CaptionEditor({
   const [isSaving, setIsSaving] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
+  const [imageLoading, setImageLoading] = useState(true);
+  const [generationStatus, setGenerationStatus] = useState<{status: string; message: string; progress: number}>({ 
+    status: 'idle', 
+    message: '', 
+    progress: 0 
+  });
   const savingRef = useRef(false);
+  const statusIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Update caption when image changes
   useEffect(() => {
     setCaption(image.caption);
     setSaveStatus('idle');
+    setImageLoading(true);
   }, [image.id]);
 
   const saveCaption = useCallback(async (captionToSave: string) => {
@@ -94,15 +102,32 @@ export default function CaptionEditor({
     if (isGenerating) return;
 
     setIsGenerating(true);
+    setGenerationStatus({ status: 'starting', message: 'Starting...', progress: 0 });
+
+    // Start polling for status
+    statusIntervalRef.current = setInterval(async () => {
+      try {
+        const statusRes = await fetch('http://localhost:11435/status');
+        const statusData = await statusRes.json();
+        setGenerationStatus(statusData);
+      } catch (err) {
+        console.error('Failed to fetch status:', err);
+      }
+    }, 1000); // Poll every second
 
     try {
+      // Load caption settings from localStorage
+      const settingsJson = localStorage.getItem('captionSettings');
+      const settings = settingsJson ? JSON.parse(settingsJson) : {};
+
       const response = await fetch('/api/ollama', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           datasetId,
           imageId: image.id,
-          temperature: 0.7,
+          temperature: settings.temperature || 0.7,
+          settings,
         }),
       });
 
@@ -110,17 +135,29 @@ export default function CaptionEditor({
 
       if (response.ok && result.success) {
         setCaption(result.caption);
+        setGenerationStatus({ status: 'completed', message: 'Caption generated!', progress: 100 });
         onUpdate(result.image);
         setSaveStatus('saved');
         setTimeout(() => setSaveStatus('idle'), 2000);
       } else {
+        setGenerationStatus({ status: 'error', message: result.error || 'Unknown error', progress: 0 });
         alert(result.error || 'Caption generation failed');
       }
     } catch (error) {
       console.error('Generate error:', error);
+      setGenerationStatus({ status: 'error', message: error instanceof Error ? error.message : 'Unknown error', progress: 0 });
       alert('Failed to connect to Qwen caption service. Make sure it\'s running.');
     } finally {
       setIsGenerating(false);
+      // Clear status polling
+      if (statusIntervalRef.current) {
+        clearInterval(statusIntervalRef.current);
+        statusIntervalRef.current = null;
+      }
+      // Reset status after a delay
+      setTimeout(() => {
+        setGenerationStatus({ status: 'idle', message: '', progress: 0 });
+      }, 3000);
     }
   };
 
@@ -186,40 +223,79 @@ export default function CaptionEditor({
 
         {/* Image Preview */}
         <div className="relative flex-shrink-0 h-80 bg-black flex items-center justify-center">
+          {imageLoading && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Loader2 className="w-8 h-8 animate-spin text-[var(--color-accent-purple)]" />
+            </div>
+          )}
           <img
             src={image.fullUrl}
             alt={image.filename}
-            className="max-w-full max-h-full object-contain"
+            onLoad={() => setImageLoading(false)}
+            className={`max-w-full max-h-full object-contain transition-opacity duration-300 ${
+              imageLoading ? 'opacity-0' : 'opacity-100'
+            }`}
           />
         </div>
 
         {/* Caption Editor */}
         <div className="flex-1 flex flex-col p-4 gap-4 overflow-auto">
           {/* AI Generation Controls */}
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-[var(--color-bg-tertiary)]/50 border border-[var(--color-border)]">
-              <Sparkles className="w-3 h-3 text-[var(--color-accent-purple)]" />
-              <span className="text-xs text-[var(--color-text-muted)] font-mono">
-                Qwen 2.5 VL
-              </span>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-[var(--color-bg-tertiary)]/50 border border-[var(--color-border)]">
+                <Sparkles className="w-3 h-3 text-[var(--color-accent-purple)]" />
+                <span className="text-xs text-[var(--color-text-muted)] font-mono">
+                  Qwen 2.5 VL
+                </span>
+              </div>
+              <button
+                onClick={generateCaption}
+                disabled={isGenerating}
+                className="btn-primary flex items-center gap-2 text-sm py-2"
+              >
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    Generate with AI
+                  </>
+                )}
+              </button>
             </div>
-            <button
-              onClick={generateCaption}
-              disabled={isGenerating}
-              className="btn-primary flex items-center gap-2 text-sm py-2"
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4" />
-                  Generate with AI
-                </>
-              )}
-            </button>
+            
+            {/* Generation Status */}
+            {isGenerating && generationStatus.status !== 'idle' && (
+              <div className="px-3 py-2 rounded-lg bg-blue-500/10 border border-blue-500/30">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-medium text-blue-200">
+                    {generationStatus.message}
+                  </span>
+                  {generationStatus.progress > 0 && (
+                    <span className="text-xs text-blue-300">
+                      {generationStatus.progress}%
+                    </span>
+                  )}
+                </div>
+                {generationStatus.progress > 0 && (
+                  <div className="h-1 bg-blue-900/30 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-blue-500 transition-all duration-300"
+                      style={{ width: `${generationStatus.progress}%` }}
+                    />
+                  </div>
+                )}
+                {generationStatus.status === 'generating' && (
+                  <p className="text-xs text-blue-300/70 mt-1">
+                    ⏰ This may take 5-10 minutes on CPU
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Caption Textarea */}

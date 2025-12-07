@@ -5,6 +5,9 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import ImageGrid from '@/components/ImageGrid';
 import CaptionEditor from '@/components/CaptionEditor';
 import BulkCaptionModal from '@/components/BulkCaptionModal';
+import CaptionSettingsModal from '@/components/CaptionSettingsModal';
+import ModelSelector from '@/components/ModelSelector';
+import DatasetSelector from '@/components/DatasetSelector';
 import { Dataset, DatasetImage } from '@/types';
 import {
   Sparkles,
@@ -15,9 +18,12 @@ import {
   AlertTriangle,
   FolderOpen,
   RefreshCw,
+  CheckCircle,
+  X,
   Trash2,
   Plus,
   Upload,
+  Settings,
 } from 'lucide-react';
 
 interface SystemStatus {
@@ -25,6 +31,8 @@ interface SystemStatus {
   dev_mode: boolean;
   caption_service: {
     available: boolean;
+    ready: boolean;  // true only when BOTH model and mmproj files exist
+    downloading: boolean;
     error?: string;
   };
   qwen_caption_model: {
@@ -59,6 +67,26 @@ function CaptionPageContent() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showConflictDialog, setShowConflictDialog] = useState(false);
   const [conflictFolderName, setConflictFolderName] = useState('');
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [captionSettings, setCaptionSettings] = useState<any>(null);
+  const [selectedBaseModel, setSelectedBaseModel] = useState('');
+  const [qwenDownloadStatus, setQwenDownloadStatus] = useState<{
+    exists: boolean;
+    downloading: boolean;
+    progress: number;
+    downloadedBytes: number;
+    expectedSize: number;
+    error?: string | null;
+  }>({ exists: false, downloading: false, progress: 0, downloadedBytes: 0, expectedSize: 8589934592 });
+  const [currentDatasetName, setCurrentDatasetName] = useState<string>('');
+  const [dismissedDownloadBanner, setDismissedDownloadBanner] = useState(false);
+
+  // Sync currentDatasetName with URL param
+  useEffect(() => {
+    if (datasetId) {
+      setCurrentDatasetName(datasetId);
+    }
+  }, [datasetId]);
 
   // Fetch dataset
   const fetchDataset = useCallback(async () => {
@@ -79,6 +107,7 @@ function CaptionPageContent() {
       setDataset(data.dataset);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
+      setDataset(null); // Clear dataset on error
     } finally {
       setLoading(false);
     }
@@ -97,7 +126,12 @@ function CaptionPageContent() {
       setSystemStatus({
         ready: false,
         dev_mode: true,
-        caption_service: { available: false, error: 'Could not check status' },
+        caption_service: { 
+          available: false, 
+          ready: false,
+          downloading: false,
+          error: 'Could not check status' 
+        },
         qwen_caption_model: { exists: false },
         ai_toolkit_models: {
           zimage_turbo: { exists: false },
@@ -110,10 +144,106 @@ function CaptionPageContent() {
     }
   }, []);
 
+  // Load current dataset ID
+  const loadCurrentDataset = useCallback(async () => {
+    try {
+      const response = await fetch('/api/datasets/current');
+      const data = await response.json();
+      if (data.success && data.currentDataset) {
+        setCurrentDatasetName(data.currentDataset); // This is actually the ID
+      }
+    } catch (error) {
+      console.error('Error loading current dataset:', error);
+    }
+  }, []);
+
+  // Handle dataset change
+  const handleDatasetChange = useCallback(async (newDatasetId: string) => {
+    try {
+      // If no dataset (all deleted), redirect to upload page
+      if (!newDatasetId) {
+        router.push('/upload');
+        return;
+      }
+      
+      // Clear current data immediately
+      setDataset(null);
+      setLoading(true);
+      setError(null);
+
+      // Set as current dataset in backend
+      await fetch('/api/datasets/current', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ datasetId: newDatasetId }),
+      });
+
+      // Update local state
+      setCurrentDatasetName(newDatasetId);
+
+      // Update URL to reflect change - this will trigger re-render and fetch via useEffect
+      router.push(`/caption?dataset=${newDatasetId}`);
+      
+    } catch (error) {
+      console.error('Error changing dataset:', error);
+      setLoading(false);
+    }
+  }, [router]);
+
+  // Check Qwen model status and trigger download if needed
+  const checkQwenModel = useCallback(async () => {
+    try {
+      // Check if model exists
+      const statusResponse = await fetch('/api/caption-model/download');
+      const statusData = await statusResponse.json();
+      
+      // Check download progress
+      const progressResponse = await fetch('/api/caption-model/download-progress');
+      const progressData = await progressResponse.json();
+      
+      if (statusData.success) {
+        setQwenDownloadStatus({
+          exists: statusData.exists,
+          downloading: progressData.downloading || statusData.downloadInProgress,
+          progress: progressData.progress || statusData.progress || 0,
+          downloadedBytes: progressData.downloaded || statusData.fileSize || 0,
+          expectedSize: progressData.total || statusData.expectedSize || 8589934592,
+          error: statusData.error || null,
+        });
+        
+        // If model doesn't exist and isn't downloading, start download
+        if (!statusData.exists && !progressData.downloading && !statusData.downloadInProgress && !statusData.error) {
+          console.log('Starting Qwen caption model download...');
+          await fetch('/api/caption-model/download', { method: 'POST' });
+          setQwenDownloadStatus(prev => ({ ...prev, downloading: true, progress: 1 }));
+        }
+      }
+    } catch (error) {
+      console.error('Error checking Qwen model:', error);
+    }
+  }, []);
+
+  // Initial load
   useEffect(() => {
+    loadCurrentDataset();
     fetchDataset();
     fetchSystemStatus();
-  }, [fetchDataset, fetchSystemStatus]);
+    checkQwenModel();
+  }, [loadCurrentDataset, fetchDataset, fetchSystemStatus, checkQwenModel]);
+  
+  // Separate effect for polling - only when actively downloading
+  useEffect(() => {
+    if (!qwenDownloadStatus.downloading || qwenDownloadStatus.exists) {
+      return; // Don't poll if not downloading or already exists
+    }
+    
+    // Poll Qwen download status every 2 seconds while downloading for real-time progress
+    const interval = setInterval(() => {
+      checkQwenModel();
+    }, 2000); // Fast polling for real-time progress updates
+    
+    return () => clearInterval(interval);
+  }, [qwenDownloadStatus.downloading, qwenDownloadStatus.exists, checkQwenModel]);
 
   // Handle image selection
   const handleSelectImage = useCallback((image: DatasetImage) => {
@@ -300,10 +430,10 @@ function CaptionPageContent() {
         setShowExportModal(false);
       } else {
         // Export to AI Toolkit
-        // Check if AI Toolkit models are ready (production only)
+        // Warn if AI Toolkit models are not ready, but allow export
         if (!exportReady && !systemStatus?.dev_mode) {
-          alert('AI Toolkit models are not ready yet. Please wait for downloads to complete.');
-          return;
+          const proceed = window.confirm('AI Toolkit models are not fully downloaded yet. Export might not work in AI Toolkit until downloads complete. Proceed anyway?');
+          if (!proceed) return;
         }
 
         const response = await fetch('/api/export', {
@@ -372,7 +502,7 @@ function CaptionPageContent() {
           <p className="text-[var(--color-text-muted)] mb-6">
             Please upload a dataset first to start captioning.
           </p>
-          <button onClick={() => router.push('/')} className="btn-primary">
+          <button onClick={() => router.push('/upload')} className="btn-primary">
             Go to Upload
           </button>
         </div>
@@ -387,33 +517,140 @@ function CaptionPageContent() {
   const hasNext = currentImageIndex < dataset.images.length - 1;
   const uncaptionedCount = dataset.totalImages - dataset.captionedCount;
 
-  const captionReady = systemStatus?.caption_service.available ?? false;
+  // Caption is ready when service is available AND both model files exist (checked by caption_service.ready)
+  const captionReady = systemStatus?.caption_service.ready ?? false;
   const exportReady = systemStatus?.ready ?? false;
 
   return (
     <div className="h-[calc(100vh-73px)] flex flex-col">
-      {/* System Status Banner */}
-      {systemStatus && !systemStatus.ready && (
-        <div className="px-6 py-3 bg-[var(--color-accent-orange)]/10 border-b border-[var(--color-accent-orange)]/30">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-[var(--color-accent-orange)] mt-0.5 flex-shrink-0" />
+      {/* Qwen Model Download Banner */}
+      {!dismissedDownloadBanner && (qwenDownloadStatus.downloading || qwenDownloadStatus.error) && !qwenDownloadStatus.exists && (
+        <div className={`px-6 py-3 border-b ${qwenDownloadStatus.error ? 'bg-red-500/10 border-red-500/30' : 'bg-blue-500/10 border-blue-500/30'}`}>
+          <div className="flex items-center gap-4 relative">
+            {qwenDownloadStatus.error ? (
+              <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0" />
+            ) : qwenDownloadStatus.exists && qwenDownloadStatus.progress === 100 ? (
+              <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+            ) : (
+              <Loader2 className="w-5 h-5 animate-spin text-blue-400 flex-shrink-0" />
+            )}
             <div className="flex-1">
-              <p className="text-sm font-medium text-[var(--color-accent-orange)] mb-1">
-                System Not Ready
+              <p className={`text-sm font-medium ${
+                qwenDownloadStatus.error ? 'text-red-200' : 
+                qwenDownloadStatus.exists && qwenDownloadStatus.progress === 100 ? 'text-green-200' : 
+                'text-blue-200'
+              }`}>
+                {qwenDownloadStatus.error ? 'Download Error' : 
+                 qwenDownloadStatus.exists && qwenDownloadStatus.progress === 100 ? 'Caption Model Ready!' :
+                 'Downloading Qwen 2.5 VL Model Files'}
               </p>
-              <ul className="text-xs text-[var(--color-accent-orange)]/80 space-y-1">
-                {systemStatus.messages.filter(m => m.includes('⚠️')).map((msg, i) => (
-                  <li key={i}>{msg}</li>
-                ))}
-              </ul>
+              <p className={`text-xs ${
+                qwenDownloadStatus.error ? 'text-red-200/70' : 
+                qwenDownloadStatus.exists && qwenDownloadStatus.progress === 100 ? 'text-green-200/70' : 
+                'text-blue-200/70'
+              }`}>
+                {qwenDownloadStatus.error ? qwenDownloadStatus.error :
+                 qwenDownloadStatus.exists && qwenDownloadStatus.progress === 100 ? 
+                 `Model (7.6 GB) and vision encoder (1.3 GB) downloaded successfully. You can now caption images!` :
+                 `Downloading model files (~${(qwenDownloadStatus.expectedSize / (1024 * 1024 * 1024)).toFixed(1)} GB total). This happens once and persists.`}
+              </p>
             </div>
+            {!qwenDownloadStatus.error && (
+              <div className="text-right mr-2">
+                <div className="text-sm font-medium text-blue-200">
+                  {qwenDownloadStatus.progress}%
+                </div>
+                <div className="text-xs text-blue-200/70">
+                  {(qwenDownloadStatus.downloadedBytes / (1024 * 1024 * 1024)).toFixed(2)} / {(qwenDownloadStatus.expectedSize / (1024 * 1024 * 1024)).toFixed(1)} GB
+                </div>
+              </div>
+            )}
+            {/* Cancel Button (only when downloading) */}
+            {qwenDownloadStatus.downloading && (
+              <button
+                onClick={async () => {
+                  if (confirm('Cancel the caption model download? You can restart it later.')) {
+                    try {
+                      await fetch('/api/caption-model/download', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'cancel' }),
+                      });
+                      setQwenDownloadStatus(prev => ({ ...prev, downloading: false, progress: 0 }));
+                    } catch (e) {
+                      console.error('Failed to cancel:', e);
+                    }
+                  }
+                }}
+                className="px-3 py-1.5 text-xs font-medium text-red-300 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+            )}
+            
+            {/* Dismiss Button (always show) */}
+            <button
+              onClick={() => setDismissedDownloadBanner(true)}
+              className="p-1 hover:bg-white/10 rounded transition-colors ml-auto"
+              title="Dismiss"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          {/* Progress bar */}
+          {!qwenDownloadStatus.error && (
+            <div className="mt-2 h-1.5 bg-blue-900/50 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-500"
+                style={{ width: `${qwenDownloadStatus.progress}%` }}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* System Status Banner */}
+      {systemStatus && !systemStatus.ready && !qwenDownloadStatus.downloading && (
+        <div className="px-6 py-3 bg-[var(--color-accent-orange)]/10 border-b border-[var(--color-accent-orange)]/30">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-[var(--color-accent-orange)] mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-[var(--color-accent-orange)] mb-1">
+                  Caption Service Not Ready
+                </p>
+                <ul className="text-xs text-[var(--color-accent-orange)]/80 space-y-1">
+                  {systemStatus.messages.filter(m => m.includes('⚠️')).map((msg, i) => (
+                    <li key={i}>{msg}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+            
+            {/* Retry Button if caption service has issues */}
+            {!systemStatus.caption_service.available && (
+              <button
+                onClick={() => window.location.reload()}
+                className="px-3 py-1.5 bg-[var(--color-accent-orange)]/20 hover:bg-[var(--color-accent-orange)]/30 text-[var(--color-accent-orange)] text-xs font-medium rounded-lg transition-colors border border-[var(--color-accent-orange)]/30"
+              >
+                Refresh Status
+              </button>
+            )}
           </div>
         </div>
       )}
 
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)] bg-[var(--color-bg-secondary)]/50 backdrop-blur-sm">
+      <div className="relative z-40 flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)] bg-[var(--color-bg-secondary)]/50 backdrop-blur-sm">
         <div className="flex items-center gap-4">
+          {/* Dataset Selector */}
+          <div className="relative z-50">
+            <DatasetSelector
+              currentDataset={currentDatasetName}
+              onDatasetChange={handleDatasetChange}
+            />
+          </div>
+          
           <div>
             <h2
               className="text-lg font-semibold"
@@ -497,6 +734,16 @@ function CaptionPageContent() {
             Add Images
           </button>
 
+          {/* Caption Settings button */}
+          <button
+            onClick={() => setShowSettingsModal(true)}
+            className="btn-secondary py-2 px-4 flex items-center gap-2"
+            title="Configure caption generation settings"
+          >
+            <Settings className="w-4 h-4" />
+            Caption Settings
+          </button>
+
           {/* Bulk caption button */}
           <button
             onClick={() => setShowBulkModal(true)}
@@ -511,13 +758,11 @@ function CaptionPageContent() {
           {/* Export button */}
           <button
             onClick={() => setShowExportModal(true)}
-            disabled={!exportReady && !systemStatus?.dev_mode}
+            // Enable export button even if models aren't ready (we can warn inside modal)
+            // Just require system status to be loaded
+            disabled={!systemStatus}
             className="btn-primary py-2 px-4 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            title={
-              systemStatus?.dev_mode 
-                ? 'Export to local folder' 
-                : (!exportReady ? 'AI Toolkit models not ready' : 'Export to AI Toolkit')
-            }
+            title="Export to AI Toolkit"
           >
             <Download className="w-4 h-4" />
             Export
@@ -556,6 +801,7 @@ function CaptionPageContent() {
           datasetId={dataset.id}
           selectedIds={Array.from(selectedIds)}
           totalUncaptioned={uncaptionedCount}
+          totalImages={dataset.images.length}
           onClose={() => setShowBulkModal(false)}
           onComplete={() => {
             setShowBulkModal(false);
@@ -563,6 +809,16 @@ function CaptionPageContent() {
           }}
         />
       )}
+
+      {/* Caption Settings Modal */}
+      <CaptionSettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        onSave={(settings) => {
+          setCaptionSettings(settings);
+          console.log('Caption settings saved:', settings);
+        }}
+      />
 
       {/* Export Modal */}
       {showExportModal && (
@@ -618,6 +874,22 @@ function CaptionPageContent() {
                   </button>
                 </div>
               </div>
+
+              {/* Model Selection for AI Toolkit Export */}
+              {exportMode === 'aitoolkit' && (
+                <div className="space-y-3">
+                  <ModelSelector
+                    modelType="base_model"
+                    value={selectedBaseModel}
+                    onChange={(modelId) => setSelectedBaseModel(modelId)}
+                    label="Base Model for Training"
+                    placeholder="Select a base model..."
+                  />
+                  <p className="text-xs text-[var(--color-text-muted)]">
+                    This determines which model will be used for LoRA training. If no model is selected, you'll need to configure it manually in AI Toolkit.
+                  </p>
+                </div>
+              )}
 
               {/* Mode-specific info */}
               {exportMode === 'aitoolkit' && (

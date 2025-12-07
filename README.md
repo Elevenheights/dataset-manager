@@ -1,8 +1,11 @@
 # UltraMuse Dataset Manager
 
-Professional LoRA training dataset preparation tool with AI-powered captioning.
+Professional LoRA training dataset preparation tool with AI-powered captioning and model management.
 
-**⚡ Want to get started fast? See [QUICKSTART.md](QUICKSTART.md)**
+**⚡ Quick Links:**
+- 📘 **[PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md)** - Complete consolidated documentation
+- 🚀 **[QUICKSTART.md](QUICKSTART.md)** - Get running in 5 minutes
+- 🏗️ **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture deep-dive
 
 ## 🌟 Features
 
@@ -66,13 +69,23 @@ The template automatically:
 
 ## 📖 Documentation
 
-- **[QUICKSTART.md](QUICKSTART.md)** ⭐ - Get running in 5 minutes
-- **[DEV_SETUP.md](DEV_SETUP.md)** - Local development setup
-- **[RUNPOD_TEMPLATE.md](RUNPOD_TEMPLATE.md)** - Template configuration
-- **[RUNPOD_DEPLOYMENT.md](RUNPOD_DEPLOYMENT.md)** - Deployment guide
-- **[USAGE_EXAMPLE.md](USAGE_EXAMPLE.md)** - Complete workflow
-- **[ENV_FILES_NOTE.md](ENV_FILES_NOTE.md)** - Environment variables explained
-- **[CAPTION_SERVICE_README.md](CAPTION_SERVICE_README.md)** - Caption service details
+**Start Here:**
+- 📘 **[PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md)** ⭐ - Complete system documentation (current status, architecture, features, roadmap)
+- 🚀 **[QUICKSTART.md](QUICKSTART.md)** - Get running in 5 minutes (local or Docker)
+
+**Deployment:**
+- 🌐 **[RUNPOD.md](RUNPOD.md)** - RunPod deployment guide (template + manual setup, troubleshooting)
+
+**Technical Deep-Dives:**
+- 🏗️ **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture and data flow
+- 🔧 **[MODEL_MANAGER_README.md](MODEL_MANAGER_README.md)** - Model manager API and features
+- 💾 **[UNIFIED_MODEL_CACHE.md](UNIFIED_MODEL_CACHE.md)** - HuggingFace cache integration
+- 🤖 **[CAPTION_SERVICE_README.md](CAPTION_SERVICE_README.md)** - Caption service technical details
+- ⚡ **[OPTIMIZATION_NOTES.md](OPTIMIZATION_NOTES.md)** - Performance optimizations
+
+**Recent Updates:**
+- 📊 **[MODEL_DOWNLOAD_PROGRESS_FIX.md](MODEL_DOWNLOAD_PROGRESS_FIX.md)** - Progress tracking + live network stats (Dec 7, 2025)
+- 🔧 **[FIXES_SUMMARY.md](FIXES_SUMMARY.md)** - All bug fixes history
 
 ## ❓ FAQ
 

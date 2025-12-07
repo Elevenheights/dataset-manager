@@ -7,6 +7,19 @@ export interface QwenCaptionResponse {
   error?: string;
 }
 
+export interface CaptionSettings {
+  customPrompt?: string;
+  prefix?: string;
+  suffix?: string;
+  replaceWords?: string;
+  replaceCaseInsensitive?: boolean;
+  replaceWholeWordsOnly?: boolean;
+  temperature?: number;
+  topK?: number;
+  topP?: number;
+  repetitionPenalty?: number;
+}
+
 const QWEN_SERVICE_URL = process.env.QWEN_SERVICE_URL || 'http://localhost:11435';
 
 // Default caption prompt template - inspired by SECourses approach
@@ -26,14 +39,37 @@ Respond with ONLY the caption, no explanations or prefixes.`;
 export async function generateCaption(
   imagePath: string,
   customPrompt?: string,
-  temperature: number = 0.7
+  temperature: number = 0.7,
+  settings?: CaptionSettings
 ): Promise<{ success: boolean; caption: string; error?: string }> {
   try {
+    // Resolve image path (handle both absolute and relative paths)
+    let resolvedPath = imagePath;
+    
+    // If path doesn't exist (e.g., Windows path in Docker), try to resolve it
+    if (!fs.existsSync(resolvedPath)) {
+      // Extract relative path from absolute path
+      // e.g., C:\...\data\datasets\abc\image.png -> data/datasets/abc/image.png
+      const dataIndex = imagePath.indexOf('data');
+      if (dataIndex !== -1) {
+        const relativePath = imagePath.substring(dataIndex);
+        const possiblePath = path.join(process.cwd(), relativePath);
+        if (fs.existsSync(possiblePath)) {
+          resolvedPath = possiblePath;
+        }
+      }
+    }
+    
+    // Check if image exists
+    if (!fs.existsSync(resolvedPath)) {
+      throw new Error(`Image file not found: ${imagePath}`);
+    }
+    
     // Read image and convert to base64
-    const imageBuffer = fs.readFileSync(imagePath);
+    const imageBuffer = fs.readFileSync(resolvedPath);
     const base64Image = imageBuffer.toString('base64');
     
-    const prompt = customPrompt || DEFAULT_CAPTION_PROMPT;
+    const prompt = customPrompt || settings?.customPrompt || DEFAULT_CAPTION_PROMPT;
 
     const response = await fetch(`${QWEN_SERVICE_URL}/caption`, {
       method: 'POST',
@@ -42,9 +78,19 @@ export async function generateCaption(
       },
       body: JSON.stringify({
         image: base64Image,
-        prompt,
-        temperature,
+        customPrompt: prompt,
+        temperature: settings?.temperature ?? temperature,
+        topK: settings?.topK ?? 50,
+        topP: settings?.topP ?? 0.95,
+        repetitionPenalty: settings?.repetitionPenalty ?? 1.05,
+        prefix: settings?.prefix ?? '',
+        suffix: settings?.suffix ?? '',
+        replaceWords: settings?.replaceWords ?? '',
+        replaceCaseInsensitive: settings?.replaceCaseInsensitive ?? true,
+        replaceWholeWordsOnly: settings?.replaceWholeWordsOnly ?? true,
       }),
+      // Increase timeout for CPU inference (can take 5-10 minutes)
+      signal: AbortSignal.timeout(600000), // 10 minutes
     });
 
     if (!response.ok) {
@@ -81,8 +127,17 @@ export async function checkQwenConnection(): Promise<{ connected: boolean; error
     
     const data = await response.json();
     
-    if (data.status !== 'ok' || !data.model_loaded) {
-      throw new Error('Qwen model not loaded');
+    // Check if service is ready (both model and mmproj files exist)
+    // Note: model_loaded is false when not in use (to save VRAM), so check 'ready' instead
+    if (!data.ready) {
+      const missing = [];
+      if (!data.model_exists) missing.push('model file');
+      if (!data.mmproj_exists) missing.push('vision encoder');
+      
+      if (missing.length > 0) {
+        throw new Error(`Missing: ${missing.join(' and ')}`);
+      }
+      throw new Error('Caption model not ready');
     }
     
     return {
@@ -100,7 +155,8 @@ export async function generateBulkCaptions(
   imagePaths: { id: string; path: string }[],
   customPrompt?: string,
   temperature: number = 0.7,
-  onProgress?: (completed: number, total: number, currentId: string) => void
+  onProgress?: (completed: number, total: number, currentId: string) => void,
+  settings?: CaptionSettings
 ): Promise<{ id: string; caption: string; success: boolean; error?: string }[]> {
   const results: { id: string; caption: string; success: boolean; error?: string }[] = [];
   
@@ -111,7 +167,7 @@ export async function generateBulkCaptions(
       onProgress(i, imagePaths.length, id);
     }
     
-    const result = await generateCaption(imagePath, customPrompt, temperature);
+    const result = await generateCaption(imagePath, customPrompt, temperature, settings);
     results.push({
       id,
       caption: result.caption,

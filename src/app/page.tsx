@@ -1,15 +1,10 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import UploadZone from '@/components/UploadZone';
-import { Sparkles, Image as ImageIcon, Send, ArrowDown } from 'lucide-react';
+import { Sparkles, Database, Zap, ArrowRight, Upload, Bot, Download } from 'lucide-react';
 
-export default function UploadPage() {
+export default function HomePage() {
   const router = useRouter();
-
-  const handleUploadComplete = (datasetId: string) => {
-    router.push(`/caption?dataset=${datasetId}`);
-  };
 
   return (
     <div className="w-full min-h-[calc(100vh-72px)] overflow-hidden flex flex-col items-center relative">
@@ -24,23 +19,18 @@ export default function UploadPage() {
         <section className="flex flex-col items-center text-center gap-8">
           <div className="inline-flex items-center gap-2 rounded-full bg-white/5 border border-white/10 px-4 py-2 text-sm text-gray-300">
             <Sparkles className="h-4 w-4 text-purple-300" />
-            Effortless LoRA dataset prep
+            Complete LoRA Training Platform
           </div>
           <div className="space-y-6 max-w-4xl">
-          <h1
+            <h1
               className="text-4xl sm:text-5xl md:text-6xl font-bold leading-tight bg-clip-text text-transparent bg-linear-to-r from-purple-300 via-white to-orange-300"
               style={{ fontFamily: 'var(--font-outfit)' }}
             >
-              Upload, caption, and export datasets without friction
-          </h1>
+              Manage Models, Prepare Datasets, Train LoRAs
+            </h1>
             <p className="text-lg sm:text-xl text-gray-300/90 leading-relaxed">
-              Drop your images once, let the pipeline handle captioning, and export in the exact format your LoRA training needs.
+              Download and manage AI models. Prepare datasets with AI captioning. Export ready-to-train packages. All in one unified platform.
             </p>
-          </div>
-          <div className="flex items-center gap-3 text-sm text-gray-400">
-            <span className="h-px w-10 bg-gray-700" />
-            Start below
-            <ArrowDown className="h-4 w-4 text-purple-200" />
           </div>
 
           {/* Discord CTA */}
@@ -62,71 +52,112 @@ export default function UploadPage() {
 
         {/* Feature highlights */}
         <section className="w-full max-w-5xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {/* Card 1 - ZIP Upload */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            {/* Card 1 - Model Manager */}
             <div className="group relative rounded-lg border border-purple-500/30 bg-linear-to-br from-purple-900/20 to-purple-950/10 p-6 text-center hover:border-purple-400/50 hover:shadow-[0_0_30px_rgba(147,51,234,0.15)] transition-all duration-300">
               <div className="mx-auto mb-4 h-12 w-12 rounded-xl bg-purple-500/20 border border-purple-400/30 flex items-center justify-center">
-                <ImageIcon className="h-6 w-6 text-purple-300" aria-hidden="true" />
+                <Database className="h-6 w-6 text-purple-300" />
               </div>
               <h3 className="text-lg font-semibold text-white mb-3" style={{ fontFamily: 'var(--font-outfit)' }}>
-                ZIP In, Ready Out
+                Model Manager
               </h3>
               <p className="text-gray-400 text-sm leading-relaxed">
-                Upload a single ZIP containing your images (and captions, if you have them).
+                Browse and download AI models. Flux, SDXL, Z-Image, and custom models supported.
               </p>
             </div>
 
-            {/* Card 2 - AI Captioning */}
+            {/* Card 2 - Dataset Upload */}
+            <div className="group relative rounded-lg border border-blue-500/30 bg-linear-to-br from-blue-900/20 to-blue-950/10 p-6 text-center hover:border-blue-400/50 hover:shadow-[0_0_30px_rgba(59,130,246,0.15)] transition-all duration-300">
+              <div className="mx-auto mb-4 h-12 w-12 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center">
+                <Upload className="h-6 w-6 text-blue-300" />
+              </div>
+              <h3 className="text-lg font-semibold text-white mb-3" style={{ fontFamily: 'var(--font-outfit)' }}>
+                Dataset Upload
+              </h3>
+              <p className="text-gray-400 text-sm leading-relaxed">
+                Upload ZIP files with your training images. Automatic extraction and organization.
+              </p>
+            </div>
+
+            {/* Card 3 - AI Captioning */}
             <div className="group relative rounded-lg border border-orange-500/30 bg-linear-to-br from-orange-900/20 to-orange-950/10 p-6 text-center hover:border-orange-400/50 hover:shadow-[0_0_30px_rgba(249,115,22,0.15)] transition-all duration-300">
               <div className="mx-auto mb-4 h-12 w-12 rounded-xl bg-orange-500/20 border border-orange-400/30 flex items-center justify-center">
-                <Sparkles className="h-6 w-6 text-orange-300" />
+                <Bot className="h-6 w-6 text-orange-300" />
               </div>
               <h3 className="text-lg font-semibold text-white mb-3" style={{ fontFamily: 'var(--font-outfit)' }}>
                 AI Captioning
               </h3>
               <p className="text-gray-400 text-sm leading-relaxed">
-                Leverage local models to generate consistent, rich captions automatically.
+                Qwen 2.5 VL generates detailed captions. Customize prompts and word replacements.
               </p>
             </div>
 
-            {/* Card 3 - Export */}
-            <div className="group relative rounded-lg border border-purple-500/30 bg-linear-to-br from-purple-900/20 via-purple-950/10 to-orange-950/10 p-6 text-center hover:border-purple-400/50 hover:shadow-[0_0_30px_rgba(147,51,234,0.15)] transition-all duration-300">
-              <div className="mx-auto mb-4 h-12 w-12 rounded-xl bg-purple-500/20 border border-purple-400/30 flex items-center justify-center">
-                <Send className="h-6 w-6 text-purple-300" />
+            {/* Card 4 - Export */}
+            <div className="group relative rounded-lg border border-green-500/30 bg-linear-to-br from-green-900/20 to-green-950/10 p-6 text-center hover:border-green-400/50 hover:shadow-[0_0_30px_rgba(34,197,94,0.15)] transition-all duration-300">
+              <div className="mx-auto mb-4 h-12 w-12 rounded-xl bg-green-500/20 border border-green-400/30 flex items-center justify-center">
+                <Download className="h-6 w-6 text-green-300" />
               </div>
               <h3 className="text-lg font-semibold text-white mb-3" style={{ fontFamily: 'var(--font-outfit)' }}>
-                One-Click Export
+                Export & Train
               </h3>
               <p className="text-gray-400 text-sm leading-relaxed">
-                Ship your dataset to your training toolkit with a single export.
+                Export to AI Toolkit format. Select your base model and start training.
               </p>
             </div>
           </div>
         </section>
 
-        {/* Upload section */}
-        <section
-          id="upload"
-          className="w-full max-w-2xl mx-auto rounded-xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-[0_20px_60px_rgba(0,0,0,0.45)] px-6 sm:px-8 pt-6 sm:pt-8 pb-8 sm:pb-10 flex flex-col items-center gap-6"
-        >
-          <div className="flex flex-col items-center gap-3 text-center">
-            <div className="inline-flex items-center gap-2 text-sm text-purple-200 bg-purple-500/10 border border-purple-400/20 px-3 py-1 rounded-full">
-              <Sparkles className="h-4 w-4" />
-              Upload & Process
-        </div>
-            <div className="flex flex-col gap-2">
-              <h2
-                className="text-2xl sm:text-3xl font-semibold text-white"
-                style={{ fontFamily: 'var(--font-outfit)' }}
-              >
-                Drop your dataset ZIP
-              </h2>
-              <p className="text-gray-300 text-sm sm:text-base leading-relaxed max-w-3xl">
-                Include optional .txt captions alongside images. We’ll handle extraction, captioning (if needed), and prepare an export for training.
+        {/* Quick Links Section */}
+        <section className="w-full max-w-3xl mx-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <button
+              onClick={() => router.push('/models')}
+              className="group p-6 bg-gradient-to-br from-purple-900/40 to-purple-950/20 border border-purple-500/30 rounded-xl hover:border-purple-400/50 hover:shadow-[0_0_30px_rgba(147,51,234,0.15)] transition-all text-left"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <Database className="w-8 h-8 text-purple-300" />
+                <ArrowRight className="w-5 h-5 text-purple-300 group-hover:translate-x-1 transition-transform" />
+              </div>
+              <h3 className="text-xl font-semibold text-white mb-2" style={{ fontFamily: 'var(--font-outfit)' }}>
+                Browse Models
+              </h3>
+              <p className="text-gray-400 text-sm">
+                Download Z-Image, Flux, SDXL, or add your own custom models
               </p>
-        </div>
-      </div>
-          <UploadZone onUploadComplete={handleUploadComplete} />
+            </button>
+
+            <button
+              onClick={() => router.push('/upload')}
+              className="group p-6 bg-gradient-to-br from-blue-900/40 to-blue-950/20 border border-blue-500/30 rounded-xl hover:border-blue-400/50 hover:shadow-[0_0_30px_rgba(59,130,246,0.15)] transition-all text-left"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <Upload className="w-8 h-8 text-blue-300" />
+                <ArrowRight className="w-5 h-5 text-blue-300 group-hover:translate-x-1 transition-transform" />
+              </div>
+              <h3 className="text-xl font-semibold text-white mb-2" style={{ fontFamily: 'var(--font-outfit)' }}>
+                Upload Dataset
+              </h3>
+              <p className="text-gray-400 text-sm">
+                Upload your training images as a ZIP file to get started
+              </p>
+            </button>
+          </div>
+        </section>
+
+        {/* Start Here Button - Bottom */}
+        <section className="w-full max-w-2xl mx-auto flex flex-col items-center gap-4">
+          <button
+            onClick={() => router.push('/models')}
+            className="group px-8 py-4 bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white text-lg font-semibold rounded-xl shadow-lg hover:shadow-purple-500/50 transition-all transform hover:scale-105 flex items-center gap-3"
+            style={{ fontFamily: 'var(--font-outfit)' }}
+          >
+            <Database className="w-6 h-6" />
+            Start Here: Model Manager
+            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+          </button>
+          <p className="text-sm text-gray-500">
+            First time? Start by downloading the models you need for training
+          </p>
         </section>
       </div>
     </div>
