@@ -9,6 +9,12 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  // Standalone output - creates self-contained minimal build
+  // Compiles and minifies all source code (harder to steal)
+  output: 'standalone',
+  // Additional minification for production
+  productionBrowserSourceMaps: false, // Don't generate source maps
+  compress: true, // Enable compression
 };
 
 export default nextConfig;

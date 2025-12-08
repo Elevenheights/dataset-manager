@@ -1,7 +1,7 @@
-# Dependencies
+# Dependencies (will be installed fresh during build)
 node_modules
 
-# Build output
+# Build output (will be built fresh during build)
 .next
 out
 
@@ -23,19 +23,30 @@ Thumbs.db
 *.log
 npm-debug.log*
 
-# Data (will be mounted as volume)
-data/datasets/*
-data/uploads/*
-!data/datasets/.gitkeep
-!data/uploads/.gitkeep
+# Development scripts (Windows PowerShell - not needed in Linux container)
+*.ps1
+*.bat
+
+# Data (will be mounted as volume - exclude ALL local data)
+data/
+!data/.gitkeep
 
 # Models (downloaded at runtime, ~20GB)
 models/
 
-# Local Test Workspaces (HUGE folders)
+# Local Test Workspaces (HUGE folders with test data)
 workspace_test/
 runpod_test/
 
-# Misc
+# Any Python cache or build artifacts
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# TypeScript build info
+tsconfig.tsbuildinfo
+
+# Documentation (not needed in runtime image)
 *.md
 !README.md

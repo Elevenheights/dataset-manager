@@ -56,50 +56,93 @@ export default function UploadZone({ onUploadComplete }: UploadZoneProps) {
 
     setProgress({
       status: 'uploading',
-      progress: 10,
-      message: 'Uploading ZIP file...',
+      progress: 0,
+      message: 'Starting upload...',
     });
 
     const formData = new FormData();
     formData.append('file', file);
     formData.append('name', datasetName.trim());
 
-    try {
-      setProgress({
-        status: 'extracting',
-        progress: 40,
-        message: 'Extracting and processing images...',
+    // Use XMLHttpRequest for real upload progress tracking
+    return new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+
+      // Track upload progress
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+          const percentComplete = Math.round((e.loaded / e.total) * 100);
+          setProgress({
+            status: 'uploading',
+            progress: percentComplete,
+            message: `Uploading... ${(e.loaded / 1024 / 1024).toFixed(1)} MB / ${(e.total / 1024 / 1024).toFixed(1)} MB`,
+          });
+        }
       });
 
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
+      // Handle upload complete (server is now processing)
+      xhr.upload.addEventListener('load', () => {
+        setProgress({
+          status: 'processing',
+          progress: 100,
+          message: 'Upload complete! Processing images...',
+        });
       });
 
-      const result = await response.json();
+      // Handle response
+      xhr.addEventListener('load', () => {
+        try {
+          const result = JSON.parse(xhr.responseText);
 
-      if (!response.ok) {
-        throw new Error(result.error || 'Upload failed');
-      }
+          if (xhr.status !== 200) {
+            throw new Error(result.error || 'Upload failed');
+          }
 
-      setProgress({
-        status: 'complete',
-        progress: 100,
-        message: result.message,
-        totalFiles: result.dataset.totalImages,
+          setProgress({
+            status: 'complete',
+            progress: 100,
+            message: result.message,
+            totalFiles: result.dataset.totalImages,
+          });
+
+          // Delay before redirect
+          setTimeout(() => {
+            onUploadComplete(result.dataset.id);
+            resolve();
+          }, 1500);
+        } catch (error) {
+          setProgress({
+            status: 'error',
+            progress: 0,
+            message: error instanceof Error ? error.message : 'Upload failed',
+          });
+          reject(error);
+        }
       });
 
-      // Delay before redirect
-      setTimeout(() => {
-        onUploadComplete(result.dataset.id);
-      }, 1500);
-    } catch (error) {
-      setProgress({
-        status: 'error',
-        progress: 0,
-        message: error instanceof Error ? error.message : 'Upload failed',
+      // Handle errors
+      xhr.addEventListener('error', () => {
+        setProgress({
+          status: 'error',
+          progress: 0,
+          message: 'Network error during upload',
+        });
+        reject(new Error('Network error'));
       });
-    }
+
+      xhr.addEventListener('abort', () => {
+        setProgress({
+          status: 'error',
+          progress: 0,
+          message: 'Upload cancelled',
+        });
+        reject(new Error('Upload cancelled'));
+      });
+
+      // Send request
+      xhr.open('POST', '/api/upload');
+      xhr.send(formData);
+    });
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -323,11 +366,22 @@ export default function UploadZone({ onUploadComplete }: UploadZoneProps) {
                   style={{ fontFamily: 'var(--font-outfit)', color: '#f4f4f5' }}
                 >
                   {progress.status === 'complete' ? 'Upload Complete!' : 
-                   progress.status === 'error' ? 'Upload Failed' : 'Processing...'}
+                   progress.status === 'error' ? 'Upload Failed' : 
+                   progress.status === 'uploading' ? 'Uploading...' :
+                   progress.status === 'processing' ? 'Processing...' :
+                   progress.status === 'extracting' ? 'Extracting...' :
+                   'Processing...'}
                 </h3>
                 <p className="text-base sm:text-lg" style={{ color: '#a1a1aa' }}>
                   {progress.message}
                 </p>
+                
+                {/* Progress Percentage */}
+                {progress.status === 'uploading' && (
+                  <p className="text-sm mt-2" style={{ color: '#9333ea' }}>
+                    {progress.progress}% uploaded
+                  </p>
+                )}
               </div>
 
               {/* Progress Bar */}
@@ -345,8 +399,10 @@ export default function UploadZone({ onUploadComplete }: UploadZoneProps) {
                       style={{
                         height: '100%',
                         width: `${progress.progress}%`,
-                        background: 'linear-gradient(90deg, #9333ea 0%, #ff6b35 100%)',
-                        transition: 'width 0.5s ease',
+                        background: progress.status === 'uploading' 
+                          ? 'linear-gradient(90deg, #9333ea 0%, #a855f7 100%)'
+                          : 'linear-gradient(90deg, #ff6b35 0%, #fbbf24 100%)',
+                        transition: 'width 0.3s ease',
                         borderRadius: '9999px',
                       }}
                     />

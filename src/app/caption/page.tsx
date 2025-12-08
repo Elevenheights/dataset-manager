@@ -202,14 +202,25 @@ function CaptionPageContent() {
       const progressData = await progressResponse.json();
       
       if (statusData.success) {
-        setQwenDownloadStatus({
+        const wasDownloading = qwenDownloadStatus.downloading;
+        const newStatus = {
           exists: statusData.exists,
           downloading: progressData.downloading || statusData.downloadInProgress,
           progress: progressData.progress || statusData.progress || 0,
           downloadedBytes: progressData.downloaded || statusData.fileSize || 0,
           expectedSize: progressData.total || statusData.expectedSize || 8589934592,
           error: statusData.error || null,
-        });
+        };
+        
+        setQwenDownloadStatus(newStatus);
+        
+        // If download just completed, refresh system status
+        if (wasDownloading && !newStatus.downloading && newStatus.exists) {
+          console.log('Qwen download completed - refreshing system status...');
+          setTimeout(() => {
+            fetchSystemStatus();
+          }, 2000); // Wait 2 seconds for caption service to detect the files
+        }
         
         // If model doesn't exist and isn't downloading, start download
         if (!statusData.exists && !progressData.downloading && !statusData.downloadInProgress && !statusData.error) {
@@ -221,7 +232,7 @@ function CaptionPageContent() {
     } catch (error) {
       console.error('Error checking Qwen model:', error);
     }
-  }, []);
+  }, [qwenDownloadStatus.downloading, fetchSystemStatus]);
 
   // Initial load
   useEffect(() => {
@@ -489,7 +500,7 @@ function CaptionPageContent() {
   if (error || !dataset) {
     return (
       <div className="min-h-[calc(100vh-73px)] flex items-center justify-center">
-        <div className="text-center max-w-md">
+        <div className="text-center max-w-md mx-auto px-4">
           <div className="w-16 h-16 rounded-full bg-[var(--color-accent-orange)]/20 flex items-center justify-center mx-auto mb-4">
             <AlertTriangle className="w-8 h-8 text-[var(--color-accent-orange)]" />
           </div>
@@ -610,7 +621,7 @@ function CaptionPageContent() {
       )}
 
       {/* System Status Banner */}
-      {systemStatus && !systemStatus.ready && !qwenDownloadStatus.downloading && (
+      {systemStatus && !systemStatus.ready && !qwenDownloadStatus.downloading && !qwenDownloadStatus.exists && (
         <div className="px-6 py-3 bg-[var(--color-accent-orange)]/10 border-b border-[var(--color-accent-orange)]/30">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-start gap-3">
@@ -630,7 +641,10 @@ function CaptionPageContent() {
             {/* Retry Button if caption service has issues */}
             {!systemStatus.caption_service.available && (
               <button
-                onClick={() => window.location.reload()}
+                onClick={() => {
+                  fetchSystemStatus();
+                  checkQwenModel();
+                }}
                 className="px-3 py-1.5 bg-[var(--color-accent-orange)]/20 hover:bg-[var(--color-accent-orange)]/30 text-[var(--color-accent-orange)] text-xs font-medium rounded-lg transition-colors border border-[var(--color-accent-orange)]/30"
               >
                 Refresh Status

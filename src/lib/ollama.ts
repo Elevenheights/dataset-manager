@@ -89,8 +89,8 @@ export async function generateCaption(
         replaceCaseInsensitive: settings?.replaceCaseInsensitive ?? true,
         replaceWholeWordsOnly: settings?.replaceWholeWordsOnly ?? true,
       }),
-      // Increase timeout for CPU inference (can take 5-10 minutes)
-      signal: AbortSignal.timeout(600000), // 10 minutes
+      // Increase timeout for CPU inference (can take 5-10 minutes, sometimes longer)
+      signal: AbortSignal.timeout(900000), // 15 minutes
     });
 
     if (!response.ok) {

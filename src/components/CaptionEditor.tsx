@@ -102,7 +102,41 @@ export default function CaptionEditor({
     if (isGenerating) return;
 
     setIsGenerating(true);
-    setGenerationStatus({ status: 'starting', message: 'Starting...', progress: 0 });
+    setGenerationStatus({ 
+      status: 'connecting', 
+      message: 'Connecting to caption service...', 
+      progress: 0 
+    });
+
+    // Check if caption service is available first
+    try {
+      const healthCheck = await fetch('http://localhost:11435/health', {
+        signal: AbortSignal.timeout(5000) // 5 second timeout for health check
+      });
+      
+      if (!healthCheck.ok) {
+        throw new Error('Caption service is not responding');
+      }
+      
+      const healthData = await healthCheck.json();
+      if (!healthData.ready) {
+        throw new Error(healthData.status === 'ok' ? 'Model files not loaded yet' : 'Caption service not ready');
+      }
+    } catch (err: any) {
+      setGenerationStatus({ 
+        status: 'error', 
+        message: err.message || 'Failed to connect to caption service', 
+        progress: 0 
+      });
+      setIsGenerating(false);
+      return;
+    }
+
+    setGenerationStatus({ 
+      status: 'starting', 
+      message: 'Initializing caption generation...', 
+      progress: 5 
+    });
 
     // Start polling for status
     statusIntervalRef.current = setInterval(async () => {
@@ -129,6 +163,7 @@ export default function CaptionEditor({
           temperature: settings.temperature || 0.7,
           settings,
         }),
+        signal: AbortSignal.timeout(900000), // 15 minute timeout (handles CPU mode)
       });
 
       const result = await response.json();
@@ -270,28 +305,70 @@ export default function CaptionEditor({
             
             {/* Generation Status */}
             {isGenerating && generationStatus.status !== 'idle' && (
-              <div className="px-3 py-2 rounded-lg bg-blue-500/10 border border-blue-500/30">
+              <div className={`px-3 py-2 rounded-lg ${
+                generationStatus.status === 'error' 
+                  ? 'bg-red-500/10 border border-red-500/30' 
+                  : generationStatus.status === 'completed'
+                  ? 'bg-green-500/10 border border-green-500/30'
+                  : 'bg-blue-500/10 border border-blue-500/30'
+              }`}>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-medium text-blue-200">
-                    {generationStatus.message}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {generationStatus.status === 'connecting' && (
+                      <Loader2 className="w-3 h-3 animate-spin text-blue-400" />
+                    )}
+                    {generationStatus.status === 'loading_model' && (
+                      <Loader2 className="w-3 h-3 animate-spin text-blue-400" />
+                    )}
+                    {generationStatus.status === 'generating' && (
+                      <Sparkles className="w-3 h-3 text-blue-400 animate-pulse" />
+                    )}
+                    {generationStatus.status === 'completed' && (
+                      <Check className="w-3 h-3 text-green-400" />
+                    )}
+                    <span className={`text-xs font-medium ${
+                      generationStatus.status === 'error' ? 'text-red-200' :
+                      generationStatus.status === 'completed' ? 'text-green-200' :
+                      'text-blue-200'
+                    }`}>
+                      {generationStatus.message}
+                    </span>
+                  </div>
                   {generationStatus.progress > 0 && (
-                    <span className="text-xs text-blue-300">
+                    <span className={`text-xs ${
+                      generationStatus.status === 'error' ? 'text-red-300' :
+                      generationStatus.status === 'completed' ? 'text-green-300' :
+                      'text-blue-300'
+                    }`}>
                       {generationStatus.progress}%
                     </span>
                   )}
                 </div>
-                {generationStatus.progress > 0 && (
+                {generationStatus.progress > 0 && generationStatus.status !== 'error' && (
                   <div className="h-1 bg-blue-900/30 rounded-full overflow-hidden">
                     <div 
-                      className="h-full bg-blue-500 transition-all duration-300"
+                      className={`h-full transition-all duration-300 ${
+                        generationStatus.status === 'completed' 
+                          ? 'bg-green-500' 
+                          : 'bg-blue-500'
+                      }`}
                       style={{ width: `${generationStatus.progress}%` }}
                     />
                   </div>
                 )}
+                {generationStatus.status === 'loading_model' && (
+                  <p className="text-xs text-blue-300/70 mt-1">
+                    💾 Loading 8GB vision model into memory...
+                  </p>
+                )}
                 {generationStatus.status === 'generating' && (
                   <p className="text-xs text-blue-300/70 mt-1">
-                    ⏰ This may take 5-10 minutes on CPU
+                    ⏰ AI is analyzing the image (5-10 minutes on CPU, 1-3 min on GPU)
+                  </p>
+                )}
+                {generationStatus.status === 'error' && (
+                  <p className="text-xs text-red-300/70 mt-1">
+                    💡 Make sure the caption service is running and model files are downloaded
                   </p>
                 )}
               </div>

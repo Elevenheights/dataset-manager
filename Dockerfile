@@ -103,19 +103,61 @@ RUN mkdir -p /app/caption-service && \
     uv pip install flask flask-cors Pillow requests huggingface-hub hf-transfer
 
 # ==========================================
-# Copy Dataset Manager (use local files instead of cloning)
+# Copy Dataset Manager source for building
+# Note: .dockerignore excludes data/, models/, workspace_test/, *.ps1, *.bat
 # ==========================================
-COPY . /app/dataset-manager
+COPY . /app/dataset-manager-build
 
 # Install Dataset Manager Python dependencies (for download_model.py)
-# Use pip directly to avoid --system flag issues with RunPod
-RUN cd /app/dataset-manager && \
+RUN cd /app/dataset-manager-build && \
     pip install -r requirements.txt
 
-# Install Dataset Manager Node.js dependencies (including devDependencies for TypeScript)
-RUN cd /app/dataset-manager && \
+# Build Next.js app in standalone mode (minimal output, no source code)
+RUN cd /app/dataset-manager-build && \
     npm install --include=dev && \
     npm run build
+
+# ==========================================
+# Copy only the standalone output (minimal runtime)
+# ==========================================
+RUN mkdir -p /app/dataset-manager
+
+# Copy standalone server (self-contained, no source code)
+RUN cp -r /app/dataset-manager-build/.next/standalone/. /app/dataset-manager/
+
+# Copy static files and public folder
+RUN cp -r /app/dataset-manager-build/.next/static /app/dataset-manager/.next/static && \
+    cp -r /app/dataset-manager-build/public /app/dataset-manager/public
+
+# Obfuscate and encrypt Python scripts with PyArmor
+RUN pip install pyarmor && \
+    # Copy source scripts to temp location
+    cp /app/dataset-manager-build/caption_service.py /tmp/ && \
+    cp /app/dataset-manager-build/download_model.py /tmp/ && \
+    # Obfuscate with PyArmor (generates encrypted + runtime files)
+    cd /tmp && \
+    pyarmor gen --output /app/dataset-manager caption_service.py download_model.py && \
+    # Copy requirements
+    cp /app/dataset-manager-build/requirements.txt /app/dataset-manager/ && \
+    cp /app/dataset-manager-build/requirements_downloads.txt /app/dataset-manager/ && \
+    # Clean up unencrypted source
+    rm /tmp/caption_service.py /tmp/download_model.py
+
+# Copy startup script and make executable
+RUN cp /app/dataset-manager-build/docker_start.sh /app/ && \
+    dos2unix /app/docker_start.sh && \
+    chmod +x /app/docker_start.sh
+
+# Add copyright notice
+RUN echo "UltraMuse Dataset Manager - Proprietary Software" > /app/dataset-manager/COPYRIGHT && \
+    echo "Copyright (c) 2025 UltraMuse. All rights reserved." >> /app/dataset-manager/COPYRIGHT && \
+    echo "Unauthorized copying, modification, or distribution is prohibited." >> /app/dataset-manager/COPYRIGHT && \
+    echo "" >> /app/dataset-manager/COPYRIGHT && \
+    echo "This software contains encrypted and obfuscated code." >> /app/dataset-manager/COPYRIGHT && \
+    echo "Reverse engineering, decompilation, or modification is strictly prohibited." >> /app/dataset-manager/COPYRIGHT
+
+# Clean up build directory to save space (~2-3 GB)
+RUN rm -rf /app/dataset-manager-build
 
 # ==========================================
 # Setup AI Toolkit UI
@@ -126,13 +168,6 @@ RUN cd /app/ai-toolkit/ui && \
 
 # NOW set NODE_ENV=production for runtime
 ENV NODE_ENV=production
-
-# ==========================================
-# Copy startup script
-# ==========================================
-COPY docker_start.sh /app/docker_start.sh
-RUN dos2unix /app/docker_start.sh && \
-    chmod +x /app/docker_start.sh
 
 # ==========================================
 # Expose ports

@@ -242,11 +242,15 @@ def generate_caption_internal(
 ) -> str:
     """Generate caption for an image using GGUF model"""
     with model_lock:
-        update_status('loading_model', 'Loading vision model...', 10)
+        if model is None:
+            update_status('loading_model', 'Loading Qwen 2.5 VL model into memory (8GB)... This takes ~60-90 seconds.', 10)
+        else:
+            update_status('loading_model', 'Model already loaded, preparing for generation...', 15)
+        
         ensure_model_loaded()
         
         if model is None:
-            update_status('error', 'Failed to load model', 0)
+            update_status('error', 'Failed to load model - check that model files exist', 0)
             raise RuntimeError("Failed to load model")
         
         prompt = prompt or DEFAULT_CAPTION_PROMPT
@@ -269,7 +273,9 @@ def generate_caption_internal(
         
         # Generate
         try:
-            update_status('generating', 'Generating caption... (this may take 5-10 minutes on CPU)', 50)
+            gpu_msg = 'GPU' if N_GPU_LAYERS > 0 else 'CPU'
+            time_estimate = '1-3 minutes' if N_GPU_LAYERS > 0 else '5-10 minutes'
+            update_status('generating', f'AI analyzing image with Qwen 2.5 VL ({gpu_msg} mode, ~{time_estimate})...', 50)
             response = model.create_chat_completion(
                 messages=messages,
                 temperature=temperature,
